@@ -1,0 +1,18 @@
+# Python后端 - FastAPI + 认证系统 (解决依赖冲突)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pymysql==1.1.0
+python-dotenv==1.0.0
+
+# 认证相关依赖 - 调整版本避免冲突
+fastapi-users[sqlalchemy]==11.3.0  # 降低版本避免冲突
+sqlalchemy==2.0.23
+alembic==1.12.1
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.6
+aiofiles==23.2.1
+
+# 数据处理和验证 - 移除冲突版本
+pydantic>=1.10.0,<2.0.0  # 使用兼容版本
+email-validator>=1.1.0,<2.0  # 使用兼容版本
