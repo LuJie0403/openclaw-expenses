@@ -67,7 +67,7 @@ class Token(BaseModel):
     token_type: str
 
 class UserResponse(UserBase):
-    id: int
+    id: str
     created_at: datetime
 
 class ExpenseSummary(BaseModel):
@@ -174,7 +174,7 @@ async def read_users_me(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        user_id: int = payload.get("user_id")
+        user_id: str = payload.get("user_id")
         if username is None or user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token payload")
     except JWTError:
