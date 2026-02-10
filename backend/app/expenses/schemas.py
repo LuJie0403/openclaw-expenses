@@ -1,4 +1,6 @@
 
+from pydantic import BaseModel
+from typing import Optional, List, Dict
 
 class StardustNode(BaseModel):
     id: str
