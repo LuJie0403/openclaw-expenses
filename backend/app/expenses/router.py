@@ -2,10 +2,15 @@
 from fastapi import APIRouter, Depends
 from typing import List
 from ..auth.router import oauth2_scheme, read_users_me
-from .schemas import ExpenseSummary, MonthlyExpense, CategoryExpense, PaymentMethod, TimelineData
+from .schemas import ExpenseSummary, MonthlyExpense, CategoryExpense, PaymentMethod, TimelineData, StardustData
 from . import service
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
+
+@router.get("/stardust", response_model=StardustData)
+async def get_stardust_graph_data(current_user: dict = Depends(read_users_me)):
+    return service.get_stardust_data()
+
 
 @router.get("/summary", response_model=ExpenseSummary)
 async def get_expenses_summary(current_user: dict = Depends(read_users_me)):

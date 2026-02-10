@@ -1,111 +1,65 @@
 
-from typing import List, Dict
-from ..core.database import get_db_connection
 
-def get_summary(user_id: str) -> Dict:
+def get_stardust_data() -> Dict:
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = """
-            SELECT
-                COALESCE(SUM(trans_amount), 0) AS total_amount,
-                COALESCE(COUNT(id), 0) AS total_count,
-                COALESCE(AVG(trans_amount), 0) AS avg_amount,
-                MIN(trans_datetime) AS earliest_date,
-                MAX(trans_datetime) AS latest_date
-            FROM personal_expenses_final
-            WHERE deleted_at = 0
+            # Query for categories (planets)
+            sql_categories = """
+                SELECT
+                    pet.trans_type_name,
+                    SUM(pef.trans_amount) AS total_amount
+                FROM personal_expenses_final AS pef
+                JOIN personal_expenses_type AS pet ON pef.trans_code = pet.trans_code
+                WHERE pef.deleted_at = 0
+                GROUP BY pet.trans_type_name
             """
-            cursor.execute(sql)
-            result = cursor.fetchone()
-            if result and result['earliest_date']:
-                result['earliest_date'] = result['earliest_date'].strftime("%Y-%m-%d")
-            if result and result['latest_date']:
-                result['latest_date'] = result['latest_date'].strftime("%Y-%m-%d")
-            return result
-    finally:
-        conn.close()
+            cursor.execute(sql_categories)
+            categories = cursor.fetchall()
 
-def get_monthly(user_id: str) -> List[Dict]:
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = """
-            SELECT
-                trans_year AS year,
-                trans_month AS month,
-                COUNT(id) AS transaction_count,
-                SUM(trans_amount) AS monthly_total,
-                AVG(trans_amount) AS avg_transaction
-            FROM personal_expenses_final
-            WHERE deleted_at = 0
-            GROUP BY trans_year, trans_month
-            ORDER BY trans_year DESC, trans_month DESC
+            # Query for individual transactions (stardust)
+            sql_transactions = """
+                SELECT
+                    pef.id,
+                    pef.trans_event,
+                    pef.trans_amount,
+                    pet.trans_type_name
+                FROM personal_expenses_final AS pef
+                JOIN personal_expenses_type AS pet ON pef.trans_code = pet.trans_code
+                WHERE pef.deleted_at = 0
             """
-            cursor.execute(sql)
-            return cursor.fetchall()
-    finally:
-        conn.close()
+            cursor.execute(sql_transactions)
+            transactions = cursor.fetchall()
 
-def get_categories(user_id: str) -> List[Dict]:
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = """
-            SELECT
-                pet.trans_type_name,
-                pet.trans_sub_type_name,
-                COUNT(pef.id) AS count,
-                SUM(pef.trans_amount) AS total_amount,
-                AVG(pef.trans_amount) AS avg_amount
-            FROM personal_expenses_final AS pef
-            JOIN personal_expenses_type AS pet
-                ON pef.trans_code = pet.trans_code AND pef.trans_sub_code = pet.trans_sub_code
-            WHERE pef.deleted_at = 0
-            GROUP BY pet.trans_type_name, pet.trans_sub_type_name
-            ORDER BY total_amount DESC
-            """
-            cursor.execute(sql)
-            return cursor.fetchall()
-    finally:
-        conn.close()
+            # Format data for ECharts
+            nodes = []
+            links = []
 
-def get_payment_methods(user_id: str) -> List[Dict]:
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = """
-            SELECT
-                pay_account,
-                COUNT(id) AS usage_count,
-                SUM(trans_amount) AS total_spent,
-                AVG(trans_amount) AS avg_per_transaction
-            FROM personal_expenses_final
-            WHERE deleted_at = 0
-            GROUP BY pay_account
-            ORDER BY total_spent DESC
-            """
-            cursor.execute(sql)
-            return cursor.fetchall()
-    finally:
-        conn.close()
+            for cat in categories:
+                nodes.append({
+                    "id": cat['trans_type_name'],
+                    "name": cat['trans_type_name'],
+                    "symbolSize": max(10, min(80, (cat['total_amount'] / 500))),
+                    "value": cat['total_amount'],
+                    "category": cat['trans_type_name'],
+                    "itemStyle": {"opacity": 0.9},
+                    "label": {"show": True, "fontSize": 16, "fontWeight": 'bold'}
+                })
 
-def get_timeline(user_id: str) -> List[Dict]:
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = """
-            SELECT
-                trans_date AS date,
-                SUM(trans_amount) AS daily_total,
-                COUNT(id) AS transaction_count
-            FROM personal_expenses_final
-            WHERE deleted_at = 0
-            GROUP BY trans_date
-            ORDER BY trans_date ASC
-            """
+            for tx in transactions:
+                nodes.append({
+                    "id": f"tx-{tx['id']}",
+                    "name": tx['trans_event'] or '消费',
+                    "symbolSize": max(3, min(30, (tx['trans_amount'] / 50))),
+                    "value": tx['trans_amount'],
+                    "category": tx['trans_type_name'],
+                    "itemStyle": {"opacity": 0.7}
+                })
+                links.append({
+                    "source": f"tx-{tx['id']}",
+                    "target": tx['trans_type_name']
+                })
 
-            cursor.execute(sql)
-            return cursor.fetchall()
+            return {"nodes": nodes, "links": links, "categories": categories}
     finally:
         conn.close()
