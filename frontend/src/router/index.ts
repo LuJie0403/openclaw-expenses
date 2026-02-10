@@ -5,6 +5,7 @@ import Categories from '@/views/Categories.vue';
 import Timeline from '@/views/Timeline.vue';
 import Payment from '@/views/Payment.vue';
 import Login from '@/views/Login.vue';
+import DataArtPoC from '@/views/DataArtPoC.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const router = createRouter({
@@ -56,6 +57,15 @@ const router = createRouter({
       component: Payment,
       meta: {
         title: '支付方式',
+        requiresAuth: true
+      }
+    },
+    {
+      path: '/poc',
+      name: 'poc',
+      component: DataArtPoC,
+      meta: {
+        title: '数据艺术原型',
         requiresAuth: true
       }
     }
