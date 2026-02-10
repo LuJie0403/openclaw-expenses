@@ -79,3 +79,4 @@ router.beforeEach((to, from, next) => {
 });
 
 export default router;
+// POC Route Added by 1024
