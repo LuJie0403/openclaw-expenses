@@ -49,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
@@ -57,6 +57,13 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const selectedKeys = ref<string[]>(['dashboard'])
+
+// Fetch user info on component mount if authenticated
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    authStore.fetchUser()
+  }
+})
 
 const menuItems = computed(() => [
   {
