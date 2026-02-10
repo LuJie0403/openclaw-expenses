@@ -10,8 +10,8 @@ app = FastAPI(
 )
 
 # Include routers
-app.include_router(auth_router.router)
-app.include_router(expenses_router.router)
+app.include_router(auth_router.router, prefix="/api")
+app.include_router(expenses_router.router, prefix="/api")
 
 @app.get("/")
 async def root():

@@ -14,9 +14,9 @@ def get_summary(user_id: str) -> Dict:
                 MIN(trans_datetime) AS earliest_date,
                 MAX(trans_datetime) AS latest_date
             FROM personal_expenses_final
-            WHERE created_by = %s
+            WHERE deleted_at = 0
             """
-            cursor.execute(sql, (user_id,))
+            cursor.execute(sql)
             result = cursor.fetchone()
             if result and result['earliest_date']:
                 result['earliest_date'] = result['earliest_date'].strftime("%Y-%m-%d")
@@ -38,11 +38,11 @@ def get_monthly(user_id: str) -> List[Dict]:
                 SUM(trans_amount) AS monthly_total,
                 AVG(trans_amount) AS avg_transaction
             FROM personal_expenses_final
-            WHERE created_by = %s
+            WHERE deleted_at = 0
             GROUP BY trans_year, trans_month
             ORDER BY trans_year DESC, trans_month DESC
             """
-            cursor.execute(sql, (user_id,))
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
@@ -61,11 +61,11 @@ def get_categories(user_id: str) -> List[Dict]:
             FROM personal_expenses_final AS pef
             JOIN personal_expenses_type AS pet
                 ON pef.trans_code = pet.trans_code AND pef.trans_sub_code = pet.trans_sub_code
-            WHERE pef.created_by = %s
+            WHERE pef.deleted_at = 0
             GROUP BY pet.trans_type_name, pet.trans_sub_type_name
             ORDER BY total_amount DESC
             """
-            cursor.execute(sql, (user_id,))
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
@@ -81,11 +81,11 @@ def get_payment_methods(user_id: str) -> List[Dict]:
                 SUM(trans_amount) AS total_spent,
                 AVG(trans_amount) AS avg_per_transaction
             FROM personal_expenses_final
-            WHERE created_by = %s
+            WHERE deleted_at = 0
             GROUP BY pay_account
             ORDER BY total_spent DESC
             """
-            cursor.execute(sql, (user_id,))
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
@@ -100,11 +100,12 @@ def get_timeline(user_id: str) -> List[Dict]:
                 SUM(trans_amount) AS daily_total,
                 COUNT(id) AS transaction_count
             FROM personal_expenses_final
-            WHERE created_by = %s
+            WHERE deleted_at = 0
             GROUP BY trans_date
             ORDER BY trans_date ASC
             """
-            cursor.execute(sql, (user_id,))
+
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
