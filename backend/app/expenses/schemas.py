@@ -1,35 +1,20 @@
 
-from pydantic import BaseModel
-from typing import Optional, List
 
-class ExpenseSummary(BaseModel):
-    total_amount: float
-    total_count: int
-    avg_amount: float
-    earliest_date: Optional[str]
-    latest_date: Optional[str]
+class StardustNode(BaseModel):
+    id: str
+    name: str
+    symbolSize: float
+    value: float
+    category: str
 
-class MonthlyExpense(BaseModel):
-    year: str
-    month: str
-    transaction_count: int
-    monthly_total: float
-    avg_transaction: float
+class StardustLink(BaseModel):
+    source: str
+    target: str
 
-class CategoryExpense(BaseModel):
-    trans_type_name: Optional[str]
-    trans_sub_type_name: Optional[str]
-    count: int
-    total_amount: float
-    avg_amount: float
+class StardustCategory(BaseModel):
+    trans_type_name: str
 
-class PaymentMethod(BaseModel):
-    pay_account: str
-    usage_count: int
-    total_spent: float
-    avg_per_transaction: float
-
-class TimelineData(BaseModel):
-    date: str
-    daily_total: float
-    transaction_count: int
+class StardustData(BaseModel):
+    nodes: List[StardustNode]
+    links: List[StardustLink]
+    categories: List[StardustCategory]
