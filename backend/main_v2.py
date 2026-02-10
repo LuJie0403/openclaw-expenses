@@ -133,13 +133,13 @@ def get_user_by_username(username: str):
             user_data = cursor.fetchone()
             if user_data:
                 return {
-                    "id": user_data['id'],  # Corrected from user_data[0]
-                    "username": user_data['username'], # Corrected from user_data[1]
-                    "email": user_data['email'], # Corrected from user_data[2]
-                    "hashed_password": user_data['hashed_password'], # Corrected from user_data[3]
-                    "full_name": user_data['full_name'], # Corrected from user_data[4]
-                    "is_active": user_data['is_active'], # Corrected from user_data[5]
-                    "created_at": user_data['created_at'], # Corrected from user_data[6]
+                    "id": user_data['id'],
+                    "username": user_data['username'],
+                    "email": user_data['email'],
+                    "hashed_password": user_data['hashed_password'],
+                    "full_name": user_data['full_name'],
+                    "is_active": user_data['is_active'],
+                    "created_at": user_data['created_at'],
                 }
             return None
     finally:
@@ -191,6 +191,7 @@ async def read_users_me(token: str = Depends(oauth2_scheme)):
 @api_router.get("/expenses/summary", response_model=ExpenseSummary)
 async def get_expenses_summary(current_user: dict = Depends(read_users_me)):
     user_id = current_user['id']
+    username = current_user['username']
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -202,9 +203,15 @@ async def get_expenses_summary(current_user: dict = Depends(read_users_me)):
                 MIN(trans_datetime) AS earliest_date,
                 MAX(trans_datetime) AS latest_date
             FROM personal_expenses_final
-            WHERE created_by = %s
+            WHERE deleted_at = 0
             """
-            cursor.execute(sql, (str(user_id),))
+            
+            if username != 'admin':
+                sql += " AND user_id = %s"
+                cursor.execute(sql, (str(user_id),))
+            else:
+                cursor.execute(sql)
+                
             result = cursor.fetchone()
             if result and result['earliest_date']:
                 result['earliest_date'] = result['earliest_date'].strftime("%Y-%m-%d")
@@ -217,6 +224,7 @@ async def get_expenses_summary(current_user: dict = Depends(read_users_me)):
 @api_router.get("/expenses/monthly", response_model=List[MonthlyExpense])
 async def get_monthly_expenses(current_user: dict = Depends(read_users_me)):
     user_id = current_user['id']
+    username = current_user['username']
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -228,11 +236,18 @@ async def get_monthly_expenses(current_user: dict = Depends(read_users_me)):
                 SUM(trans_amount) AS monthly_total,
                 AVG(trans_amount) AS avg_transaction
             FROM personal_expenses_final
-            WHERE created_by = %s
-            GROUP BY trans_year, trans_month
-            ORDER BY trans_year DESC, trans_month DESC
+            WHERE deleted_at = 0
             """
-            cursor.execute(sql, (str(user_id),))
+            
+            if username != 'admin':
+                sql += " AND user_id = %s"
+                params = (str(user_id),)
+            else:
+                params = ()
+                
+            sql += " GROUP BY trans_year, trans_month ORDER BY trans_year DESC, trans_month DESC"
+            
+            cursor.execute(sql, params)
             return cursor.fetchall()
     finally:
         conn.close()
@@ -240,6 +255,7 @@ async def get_monthly_expenses(current_user: dict = Depends(read_users_me)):
 @api_router.get("/expenses/categories", response_model=List[CategoryExpense])
 async def get_category_expenses(current_user: dict = Depends(read_users_me)):
     user_id = current_user['id']
+    username = current_user['username']
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -253,11 +269,18 @@ async def get_category_expenses(current_user: dict = Depends(read_users_me)):
             FROM personal_expenses_final AS pef
             JOIN personal_expenses_type AS pet
                 ON pef.trans_code = pet.trans_code AND pef.trans_sub_code = pet.trans_sub_code
-            WHERE pef.created_by = %s
-            GROUP BY pet.trans_type_name, pet.trans_sub_type_name
-            ORDER BY total_amount DESC
+            WHERE pef.deleted_at = 0
             """
-            cursor.execute(sql, (str(user_id),))
+            
+            if username != 'admin':
+                sql += " AND pef.user_id = %s"
+                params = (str(user_id),)
+            else:
+                params = ()
+                
+            sql += " GROUP BY pet.trans_type_name, pet.trans_sub_type_name ORDER BY total_amount DESC"
+            
+            cursor.execute(sql, params)
             return cursor.fetchall()
     finally:
         conn.close()
@@ -265,6 +288,7 @@ async def get_category_expenses(current_user: dict = Depends(read_users_me)):
 @api_router.get("/expenses/payment-methods", response_model=List[PaymentMethod])
 async def get_payment_method_expenses(current_user: dict = Depends(read_users_me)):
     user_id = current_user['id']
+    username = current_user['username']
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -275,11 +299,18 @@ async def get_payment_method_expenses(current_user: dict = Depends(read_users_me
                 SUM(trans_amount) AS total_spent,
                 AVG(trans_amount) AS avg_per_transaction
             FROM personal_expenses_final
-            WHERE created_by = %s
-            GROUP BY pay_account
-            ORDER BY total_spent DESC
+            WHERE deleted_at = 0
             """
-            cursor.execute(sql, (str(user_id),))
+            
+            if username != 'admin':
+                sql += " AND user_id = %s"
+                params = (str(user_id),)
+            else:
+                params = ()
+                
+            sql += " GROUP BY pay_account ORDER BY total_spent DESC"
+            
+            cursor.execute(sql, params)
             return cursor.fetchall()
     finally:
         conn.close()
@@ -287,6 +318,7 @@ async def get_payment_method_expenses(current_user: dict = Depends(read_users_me
 @api_router.get("/expenses/timeline", response_model=List[TimelineData])
 async def get_expenses_timeline(current_user: dict = Depends(read_users_me)):
     user_id = current_user['id']
+    username = current_user['username']
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -296,11 +328,18 @@ async def get_expenses_timeline(current_user: dict = Depends(read_users_me)):
                 SUM(trans_amount) AS daily_total,
                 COUNT(id) AS transaction_count
             FROM personal_expenses_final
-            WHERE created_by = %s
-            GROUP BY trans_date
-            ORDER BY trans_date ASC
+            WHERE deleted_at = 0
             """
-            cursor.execute(sql, (str(user_id),))
+            
+            if username != 'admin':
+                sql += " AND user_id = %s"
+                params = (str(user_id),)
+            else:
+                params = ()
+                
+            sql += " GROUP BY trans_date ORDER BY trans_date ASC"
+            
+            cursor.execute(sql, params)
             return cursor.fetchall()
     finally:
         conn.close()
