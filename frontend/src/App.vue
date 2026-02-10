@@ -26,7 +26,10 @@
           style="flex: 1;"
         />
         <div class="user-actions">
-           <a-button type="link" @click="handleLogout" style="color: white;">退出登录</a-button>
+           <a-space>
+             <span style="color: white;">你好, {{ authStore.user?.full_name || authStore.user?.username }}</span>
+             <a-button type="link" @click="handleLogout" style="color: white;">退出登录</a-button>
+           </a-space>
         </div>
       </a-layout-header>
 
