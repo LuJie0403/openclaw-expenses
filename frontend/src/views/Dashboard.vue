@@ -151,6 +151,8 @@ const initMonthlyChart = () => {
 
   const data = expenseStore.monthlyExpenses.slice(0, parseInt(chartTimeRange.value))
 
+  monthlyChart.theme({ type: 'classicDark' }); // Enable Dark Theme
+
   monthlyChart
     .line()
     .data(data)
@@ -161,7 +163,7 @@ const initMonthlyChart = () => {
     .axis('x', { title: '月份' })
     .axis('y', { 
       title: '支出金额 (¥)',
-      labelFormatter: (value: number) => `¥${(value / 1000).toFixed(0)}k`
+      labelFormatter: (value: number) => `¥${(value / 1000).toFixed(0)}K`
     })
     .tooltip({
       items: [
@@ -187,6 +189,8 @@ const initCategoryChart = () => {
       autoFit: true,
       height: 350,
     })
+    
+    categoryChart.theme({ type: 'classicDark' }); // Enable Dark Theme
 
     categoryChart
       .interval()
@@ -200,7 +204,8 @@ const initCategoryChart = () => {
       .label({ 
         text: 'trans_sub_type_name',
         fontSize: 12,
-        fontWeight: 'bold'
+        fontWeight: 'bold',
+        fill: '#fff'
       })
       .tooltip({
         items: [
@@ -216,6 +221,8 @@ const initCategoryChart = () => {
       autoFit: true,
       height: 350,
     })
+    
+    categoryChart.theme({ type: 'classicDark' }); // Enable Dark Theme
 
     categoryChart
       .treemap()
@@ -247,6 +254,8 @@ const initPaymentChart = () => {
     autoFit: true,
     height: 350,
   })
+  
+  paymentChart.theme({ type: 'classicDark' }); // Enable Dark Theme
 
   paymentChart
     .interval()
@@ -275,30 +284,42 @@ const initPaymentChart = () => {
 const initHeatmapChart = () => {
   if (!heatmapChartRef.value || !expenseStore.timeline.length) return
 
-  const data = expenseStore.timeline
+  // 1. Process data for calendar heatmap
+  const calendarData = expenseStore.timeline.map(d => ({
+    date: d.date,
+    value: d.daily_total,
+    week: dayjs(d.date).day(), // 0 (Sun) - 6 (Sat)
+    day: dayjs(d.date).format('YYYY-MM-DD'),
+  }));
 
   heatmapChart = new Chart({
     container: heatmapChartRef.value,
     autoFit: true,
     height: 350,
   })
+  
+  heatmapChart.theme({ type: 'classicDark' }); 
+  
+  heatmapChart.coordinate({ type: 'theta' });
 
   heatmapChart
-    .rect()
-    .data(data)
-    .encode('x', 'date')
-    .encode('y', 'date')
-    .encode('color', 'daily_total')
-    .scale('color', { palette: 'ylOrRd' })
-    .axis('x', { title: '日期' })
-    .axis('y', false)
+    .cell() // Use cell geometry for heatmaps
+    .data(calendarData)
+    .encode('x', d => dayjs(d.date).week()) // week number
+    .encode('y', d => dayjs(d.date).day())  // day of week
+    .encode('color', 'value')
+    .scale('color', {
+        palette: 'spectral', // Use a vibrant palette for dark mode
+    })
+    .style({
+        inset: 0.5,
+    })
     .tooltip({
       items: [
-        { name: '日期', field: 'date' },
-        { name: '日支出', field: 'daily_total', valueFormatter: (value: number) => `¥${formatNumber(value)}` },
-        { name: '交易笔数', field: 'transaction_count' }
+        { name: '日期', field: 'day' },
+        { name: '日支出', field: 'value', valueFormatter: (value) => `¥${formatNumber(value)}` },
       ]
-    })
+    });
 
   heatmapChart.render()
 }
@@ -336,7 +357,7 @@ watch(chartType, () => {
 .dashboard-container {
   padding: 20px;
   min-height: calc(100vh - 64px);
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  /* background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);  REMOVED */
 }
 
 .stat-cards {
@@ -344,10 +365,12 @@ watch(chartType, () => {
 }
 
 .stat-card {
-  background: white;
+  background: rgba(25, 25, 25, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid #333;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   transition: all 0.3s ease;
@@ -356,7 +379,8 @@ watch(chartType, () => {
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  background: rgba(40, 40, 40, 0.8);
 }
 
 .stat-card.primary {
@@ -388,13 +412,14 @@ watch(chartType, () => {
 .stat-number {
   font-size: 24px;
   font-weight: bold;
-  color: #262626;
+  color: #fff; /* Changed from #262626 */
   margin-bottom: 4px;
+  text-shadow: 0 0 10px rgba(255,255,255,0.2);
 }
 
 .stat-label {
   font-size: 14px;
-  color: #8c8c8c;
+  color: #aaa; /* Changed from #8c8c8c */
 }
 
 .chart-section {
@@ -402,10 +427,12 @@ watch(chartType, () => {
 }
 
 .chart-card {
-  background: white;
+  background: rgba(25, 25, 25, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid #333;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   height: 100%;
 }
 
@@ -420,12 +447,12 @@ watch(chartType, () => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #262626;
+  color: #fff; /* Changed from #262626 */
 }
 
 .chart-subtitle {
   font-size: 12px;
-  color: #8c8c8c;
+  color: #888;
 }
 
 .chart-container {
@@ -439,7 +466,7 @@ watch(chartType, () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.8); /* Changed from white */
   display: flex;
   justify-content: center;
   align-items: center;

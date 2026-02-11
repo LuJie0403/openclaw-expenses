@@ -106,6 +106,8 @@ const initTimelineChart = () => {
     autoFit: true,
     height: 400,
   })
+  
+  timelineChart.theme({ type: 'classicDark' });
 
   timelineChart
     .line()
@@ -164,20 +166,27 @@ onMounted(async () => {
 .timeline-container {
   padding: 20px;
   min-height: calc(100vh - 64px);
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  /* background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); REMOVED */
 }
 
 .main-card {
-  background: white;
+  background: rgba(25, 25, 25, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid #333;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .chart-controls {
   margin-bottom: 24px;
   padding: 16px;
-  background: #f5f5f5;
+  background: rgba(40, 40, 40, 0.6);
   border-radius: 8px;
+  border: 1px solid #444;
+}
+
+.chart-controls span {
+  color: #ccc;
 }
 
 .chart-section {
@@ -191,28 +200,30 @@ onMounted(async () => {
 
 .stats-grid {
   padding: 20px;
-  background: #fafafa;
+  background: transparent;
   border-radius: 8px;
 }
 
 .stat-item {
   text-align: center;
   padding: 16px;
-  background: white;
+  background: rgba(40, 40, 40, 0.6);
+  border: 1px solid #444;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: bold;
-  color: #667eea;
+  color: #a0d911; /* Lime Green for stats */
   margin-bottom: 4px;
+  text-shadow: 0 0 5px rgba(160, 217, 17, 0.3);
 }
 
 .stat-label {
   font-size: 14px;
-  color: #8c8c8c;
+  color: #aaa;
 }
 
 @media (max-width: 768px) {

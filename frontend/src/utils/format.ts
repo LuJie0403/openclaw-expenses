@@ -5,7 +5,7 @@ export function formatNumber(num: number, decimals: number = 0): string {
   } else if (num >= 10000) {
     return (num / 10000).toFixed(decimals) + '万'
   } else if (num >= 1000) {
-    return (num / 1000).toFixed(decimals) + 'k'
+    return (num / 1000).toFixed(decimals) + 'K'
   }
   return num.toLocaleString('zh-CN', { maximumFractionDigits: decimals })
 }

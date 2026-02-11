@@ -83,6 +83,8 @@ const initChart = () => {
     autoFit: true,
     height: 400,
   })
+  
+  categoryChart.theme({ type: 'classicDark' });
 
   const data = expenseStore.categories.slice(0, 15)
 
@@ -99,7 +101,7 @@ const initChart = () => {
     })
     .axis('y', { 
       title: '支出金额 (¥)',
-      labelFormatter: (value: number) => `¥${(value / 1000).toFixed(0)}k`
+      labelFormatter: (value: number) => `¥${(value / 1000).toFixed(0)}K`
     })
     .tooltip({
       items: [
@@ -127,13 +129,15 @@ onMounted(async () => {
 .categories-container {
   padding: 20px;
   min-height: calc(100vh - 64px);
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  /* background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); REMOVED */
 }
 
 .main-card {
-  background: white;
+  background: rgba(25, 25, 25, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid #333;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .chart-section {
@@ -149,13 +153,17 @@ onMounted(async () => {
   margin-top: 24px;
 }
 
+.category-list h3 {
+  color: #fff;
+}
+
 .amount-text {
   font-weight: 600;
-  color: #cf1322;
+  color: #ff4d4f; /* Brighter red for dark mode */
 }
 
 .avg-text {
-  color: #1890ff;
+  color: #40a9ff; /* Brighter blue for dark mode */
 }
 
 @media (max-width: 768px) {
