@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import pymysql
-import uuid
 from dotenv import load_dotenv
 from config import settings
 from passlib.context import CryptContext
@@ -12,6 +11,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_password_hash(password):
     return pwd_context.hash(password)
+
+def is_truthy(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 def init_db():
     try:
@@ -42,22 +44,30 @@ def init_db():
             # Check if admin exists
             cursor.execute("SELECT * FROM expenses_user WHERE username='admin'")
             admin = cursor.fetchone()
-            
-            admin_password = "Af3f@!@Mn5g"
-            hashed_pwd = get_password_hash(admin_password)
-            
+
+            admin_password = os.getenv("INITIAL_ADMIN_PASSWORD", "").strip()
+            force_reset_admin_password = is_truthy(os.getenv("RESET_ADMIN_PASSWORD", "false"))
+
             if not admin:
-                print(f"Creating admin user with password: {admin_password}")
+                if not admin_password:
+                    raise ValueError(
+                        "INITIAL_ADMIN_PASSWORD is required when creating admin user for the first time."
+                    )
+                hashed_pwd = get_password_hash(admin_password)
+                print("Creating admin user...")
                 # Use 'SYSTEM' for admin ID to match historical data
                 cursor.execute("""
                 INSERT INTO expenses_user (id, username, email, hashed_password, full_name, is_active)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """, ('SYSTEM', 'admin', 'admin@example.com', hashed_pwd, 'Administrator', True))
-            else:
-                print(f"Updating admin password to: {admin_password}")
+            elif admin_password and force_reset_admin_password:
+                hashed_pwd = get_password_hash(admin_password)
+                print("Resetting admin password...")
                 cursor.execute("""
                 UPDATE expenses_user SET hashed_password=%s WHERE username='admin'
                 """, (hashed_pwd,))
+            else:
+                print("Admin user already exists. Skip password reset.")
             
             connection.commit()
             print("Database initialized successfully (expenses_user table updated).")

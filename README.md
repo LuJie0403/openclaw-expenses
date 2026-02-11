@@ -105,13 +105,16 @@ npm run build
 ```
 
 ### 核心端点
-- `GET /api/v1/health` - 健康检查
-- `GET /api/v1/expenses` - 支出列表（支持过滤、分页）
-- `GET /api/v1/expenses/summary` - 支出总览
-- `GET /api/v1/expenses/categories` - 分类统计
-- `GET /api/v1/expenses/monthly` - 月度统计
-- `GET /api/v1/expenses/payment-methods` - 支付方式
-- `GET /api/v1/expenses/timeline` - 时间线数据
+- `GET /health` - 健康检查（根路径）
+- `GET /api/health` - 健康检查（API 前缀）
+- `POST /api/auth/login` - 登录获取 JWT
+- `GET /api/auth/me` - 当前用户信息
+- `GET /api/expenses/summary` - 支出总览
+- `GET /api/expenses/categories` - 分类统计
+- `GET /api/expenses/monthly` - 月度统计
+- `GET /api/expenses/payment-methods` - 支付方式
+- `GET /api/expenses/timeline` - 时间线数据
+- `GET /api/expenses/stardust` - 星辰图数据
 
 完整API文档请参考: [API文档](docs/api-documentation.md)
 

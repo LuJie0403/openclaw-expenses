@@ -29,7 +29,7 @@ if [ ! -f ".env.development" ]; then
 fi
 
 echo "📥 安装Python依赖..."
-pip install -r requirements-minimal.txt
+pip install -r requirements-jwt.txt
 
 echo "🚀 启动后端服务..."
 nohup uvicorn main_v2:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
@@ -82,9 +82,9 @@ echo ""
 echo "✅ 部署完成！"
 echo ""
 echo "📊 应用信息："
-echo "   • 后端API: http://localhost:8000/api/v1/health"
+echo "   • 后端API: http://localhost:8000/api/health"
 echo "   • 前端应用: http://localhost:3000"
-echo "   • API文档: http://localhost:8000/api/docs"
+echo "   • API文档: http://localhost:8000/docs"
 echo ""
 echo "📝 下一步操作："
 echo "   1. 配置数据库连接 (.env.development)"

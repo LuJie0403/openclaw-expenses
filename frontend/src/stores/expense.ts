@@ -25,13 +25,18 @@ export const useExpenseStore = defineStore('expense', () => {
     paymentMethods.value.slice(0, 8)
   )
 
+  const raiseStoreError = (message: string, err: unknown) => {
+    error.value = message
+    console.error(err)
+    throw err
+  }
+
   // 方法
   const fetchSummary = async () => {
     try {
       summary.value = await expenseAPI.getSummary()
     } catch (err) {
-      error.value = '获取支出总览失败'
-      console.error(err)
+      raiseStoreError('获取支出总览失败', err)
     }
   }
 
@@ -39,8 +44,7 @@ export const useExpenseStore = defineStore('expense', () => {
     try {
       monthlyExpenses.value = await expenseAPI.getMonthly()
     } catch (err) {
-      error.value = '获取月度数据失败'
-      console.error(err)
+      raiseStoreError('获取月度数据失败', err)
     }
   }
 
@@ -48,8 +52,7 @@ export const useExpenseStore = defineStore('expense', () => {
     try {
       categories.value = await expenseAPI.getCategories()
     } catch (err) {
-      error.value = '获取分类数据失败'
-      console.error(err)
+      raiseStoreError('获取分类数据失败', err)
     }
   }
 
@@ -57,8 +60,7 @@ export const useExpenseStore = defineStore('expense', () => {
     try {
       paymentMethods.value = await expenseAPI.getPaymentMethods()
     } catch (err) {
-      error.value = '获取支付方式失败'
-      console.error(err)
+      raiseStoreError('获取支付方式失败', err)
     }
   }
 
@@ -66,28 +68,25 @@ export const useExpenseStore = defineStore('expense', () => {
     try {
       timeline.value = await expenseAPI.getTimeline()
     } catch (err) {
-      error.value = '获取时间线数据失败'
-      console.error(err)
+      raiseStoreError('获取时间线数据失败', err)
     }
   }
 
   const fetchAllData = async () => {
     loading.value = true
     error.value = null
-    try {
-      await Promise.all([
-        fetchSummary(),
-        fetchMonthlyData(),
-        fetchCategories(),
-        fetchPaymentMethods(),
-        fetchTimeline()
-      ])
-    } catch (err) {
-      error.value = '数据加载失败'
-      console.error(err)
-    } finally {
-      loading.value = false
+    const results = await Promise.allSettled([
+      fetchSummary(),
+      fetchMonthlyData(),
+      fetchCategories(),
+      fetchPaymentMethods(),
+      fetchTimeline()
+    ])
+    const failedCount = results.filter(result => result.status === 'rejected').length
+    if (failedCount > 0) {
+      error.value = `部分数据加载失败（${failedCount}/${results.length}）`
     }
+    loading.value = false
   }
 
   return {
