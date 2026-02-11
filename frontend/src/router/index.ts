@@ -5,7 +5,7 @@ import Categories from '@/views/Categories.vue';
 import Timeline from '@/views/Timeline.vue';
 import Payment from '@/views/Payment.vue';
 import Login from '@/views/Login.vue';
-import DataArtPoC from '@/views/DataArtPoC.vue';
+import Stardust from '@/views/Stardust.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const router = createRouter({
@@ -29,7 +29,7 @@ const router = createRouter({
       name: 'dashboard',
       component: Dashboard,
       meta: {
-        title: '支出总览',
+        title: '总览',
         requiresAuth: true
       }
     },
@@ -61,11 +61,11 @@ const router = createRouter({
       }
     },
     {
-      path: '/poc',
-      name: 'poc',
-      component: DataArtPoC,
+      path: '/stardust',
+      name: 'stardust',
+      component: Stardust,
       meta: {
-        title: '数据艺术原型',
+        title: '消费星辰',
         requiresAuth: true
       }
     }
@@ -76,7 +76,7 @@ router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
   
   if (to.meta.title) {
-    document.title = `${to.meta.title} - OpenClaw 支出一览`;
+    document.title = `${to.meta.title} - 钱呢`;
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {

@@ -1,7 +1,7 @@
 
 <template>
   <div class="login-container">
-    <a-card class="login-card" title="OpenClaw Expenses" :bordered="false">
+    <a-card class="login-card" title="钱呢 (MoneyWhere)" :bordered="false">
       <template #extra>
         <a href="#">Help</a>
       </template>

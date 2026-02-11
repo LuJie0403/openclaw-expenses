@@ -15,7 +15,7 @@ from config import settings
 load_dotenv()
 
 app = FastAPI(
-    title="OpenClaw Expenses API",
+    title="钱呢 API (Where Is My Money)",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -341,6 +341,116 @@ async def get_expenses_timeline(current_user: dict = Depends(read_users_me)):
             
             cursor.execute(sql, params)
             return cursor.fetchall()
+    finally:
+        conn.close()
+
+# --- Visualization Routes ---
+@api_router.get("/expenses/stardust")
+async def get_expenses_stardust(current_user: dict = Depends(read_users_me)):
+    user_id = current_user['id']
+    username = current_user['username']
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Fetch aggregated data for graph: Category -> SubCategory -> Amount
+            sql = """
+            SELECT
+                pet.trans_type_name,
+                pet.trans_sub_type_name,
+                SUM(pef.trans_amount) AS total_amount
+            FROM personal_expenses_final AS pef
+            JOIN personal_expenses_type AS pet
+                ON pef.trans_code = pet.trans_code AND pef.trans_sub_code = pet.trans_sub_code
+            WHERE pef.deleted_at = 0
+            """
+            
+            if username != 'admin':
+                sql += " AND pef.user_id = %s"
+                params = (str(user_id),)
+            else:
+                params = ()
+                
+            sql += " GROUP BY pet.trans_type_name, pet.trans_sub_type_name"
+            
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            
+            # Transform to Graph Data
+            nodes = []
+            links = []
+            categories = []
+            
+            # Root Node (User)
+            root_name = "Total Expenses"
+            total_sum = sum(row['total_amount'] for row in rows)
+            nodes.append({
+                "id": "root",
+                "name": root_name,
+                "symbolSize": 50,
+                "value": total_sum,
+                "category": 0,
+                "label": {"show": True}
+            })
+            categories.append({"name": root_name})
+            
+            # Process Categories and SubCategories
+            cat_map = {} # To track unique categories
+            cat_set = set() # Use a set for unique check
+            cat_index = 1 
+            
+            for row in rows:
+                cat_name = row['trans_type_name']
+                
+                # Add Category Node if not exists
+                if cat_name not in cat_set:
+                    cat_id = f"cat_{cat_name}"
+                    nodes.append({
+                        "id": cat_id,
+                        "name": cat_name,
+                        "symbolSize": 30, # Base size, will adjust later if needed
+                        "value": 0, # Accumulate
+                        "category": cat_index,
+                        "label": {"show": True}
+                    })
+                    links.append({"source": "root", "target": cat_id})
+                    categories.append({"name": cat_name})
+                    cat_map[cat_name] = len(nodes) - 1 # Index in nodes array
+                    cat_set.add(cat_name)
+                    cat_index += 1
+            
+            # Second pass to add sub-categories and accumulate values
+            for row in rows:
+                cat_name = row['trans_type_name']
+                sub_cat_name = row['trans_sub_type_name']
+                amount = float(row['total_amount'])
+
+                # Update Category Node Value
+                cat_node_idx = cat_map[cat_name]
+                nodes[cat_node_idx]["value"] += amount
+                
+                # Add SubCategory Node
+                sub_cat_id = f"sub_{cat_name}_{sub_cat_name}"
+                nodes.append({
+                    "id": sub_cat_id,
+                    "name": sub_cat_name,
+                    "symbolSize": 10 + (amount / total_sum) * 40, # Dynamic size
+                    "value": amount,
+                    "category": nodes[cat_node_idx]["category"], # Use parent's category index
+                    "label": {"show": amount > (total_sum * 0.01)} # Only show label if > 1%
+                })
+                links.append({"source": f"cat_{cat_name}", "target": sub_cat_id})
+
+            # Adjust category node sizes finally
+            for node in nodes:
+                if node["id"].startswith("cat_"):
+                     node["symbolSize"] = 20 + (node["value"] / total_sum) * 60
+
+            return {
+                "nodes": nodes,
+                "links": links,
+                "categories": categories
+            }
+
     finally:
         conn.close()
 
