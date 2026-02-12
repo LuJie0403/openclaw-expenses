@@ -88,9 +88,9 @@
     DB_HOST=127.0.0.1
     DB_PORT=3306
     DB_USER=openclaw_aws
-    DB_PASSWORD=9!wQSw@12sq
+    DB_PASSWORD=your_database_password
     DB_NAME=iterlife4openclaw
-    SECRET_KEY=openclaw_expenses_secret_key_2026
+    SECRET_KEY=your_jwt_secret_key
     EOF
     "
     ```

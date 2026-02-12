@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useExpenseStore } from '@/stores/expense'
 import { Chart } from '@antv/g2'
 import { formatNumber, formatDate } from '@/utils/format'
@@ -159,6 +159,10 @@ onMounted(async () => {
   }
   
   setTimeout(initTimelineChart, 100)
+})
+
+onUnmounted(() => {
+  timelineChart?.destroy()
 })
 </script>
 

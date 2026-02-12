@@ -1,7 +1,7 @@
+# backend/app/expenses/schemas.py
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional
 
-# --- Original Models ---
 class ExpenseSummary(BaseModel):
     total_amount: float
     total_count: int
@@ -33,23 +33,3 @@ class TimelineData(BaseModel):
     date: str
     daily_total: float
     transaction_count: int
-
-# --- Stardust Models ---
-class StardustNode(BaseModel):
-    id: str
-    name: str
-    symbolSize: float
-    value: float
-    category: str
-
-class StardustLink(BaseModel):
-    source: str
-    target: str
-
-class StardustCategory(BaseModel):
-    trans_type_name: str
-
-class StardustData(BaseModel):
-    nodes: List[StardustNode]
-    links: List[StardustLink]
-    categories: List[StardustCategory]
