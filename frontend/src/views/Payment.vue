@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useExpenseStore } from '@/stores/expense'
 import { Chart } from '@antv/g2'
 import { formatNumber } from '@/utils/format'
@@ -168,6 +168,13 @@ onMounted(async () => {
   }
   
   setTimeout(initChart, 100)
+})
+
+onUnmounted(() => {
+  if (paymentChart) {
+    paymentChart.destroy()
+    paymentChart = null
+  }
 })
 </script>
 

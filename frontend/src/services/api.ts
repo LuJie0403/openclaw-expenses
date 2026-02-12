@@ -1,10 +1,7 @@
-
-import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
+import axios, { type AxiosInstance } from 'axios'
 
 // Determine API base URL
-const API_BASE_URL = import.meta.env.PROD 
-  ? '/api' // In production (Nginx proxy), use relative path
-  : 'http://localhost:8000' // In development, point to local backend (or proxy if Vite config handles it)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // Create Axios instance
 const api: AxiosInstance = axios.create({

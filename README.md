@@ -40,8 +40,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # 配置环境变量
-cp .env.example .env.development
-# 编辑 .env.development 填入数据库配置
+cp .env.development.example .env.development
+# 编辑 .env.development，按环境填入数据库和管理员初始化配置
+# 必填: DB_*, SECRET_KEY, ADMIN_USER_ID, ADMIN_USERNAME, ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD
+
+# 可选: 指定环境，默认 development
+export APP_ENV=development
 
 # 启动服务
 ./start.sh
@@ -105,13 +109,16 @@ npm run build
 ```
 
 ### 核心端点
-- `GET /api/v1/health` - 健康检查
-- `GET /api/v1/expenses` - 支出列表（支持过滤、分页）
-- `GET /api/v1/expenses/summary` - 支出总览
-- `GET /api/v1/expenses/categories` - 分类统计
-- `GET /api/v1/expenses/monthly` - 月度统计
-- `GET /api/v1/expenses/payment-methods` - 支付方式
-- `GET /api/v1/expenses/timeline` - 时间线数据
+- `GET /health` - 健康检查（根路径）
+- `GET /api/health` - 健康检查（API 前缀）
+- `POST /api/auth/login` - 登录获取 JWT
+- `GET /api/auth/me` - 当前用户信息
+- `GET /api/expenses/summary` - 支出总览
+- `GET /api/expenses/categories` - 分类统计
+- `GET /api/expenses/monthly` - 月度统计
+- `GET /api/expenses/payment-methods` - 支付方式
+- `GET /api/expenses/timeline` - 时间线数据
+- `GET /api/expenses/stardust` - 星辰图数据
 
 完整API文档请参考: [API文档](docs/api-documentation.md)
 

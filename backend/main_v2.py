@@ -6,7 +6,6 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timedelta
 import pymysql
-import os
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -25,7 +24,7 @@ api_router = APIRouter(prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +36,22 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+def get_health_payload():
+    return {
+        "status": "ok",
+        "service": "openclaw-expenses-api",
+        "version": app.version,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+@app.get("/health")
+async def health_check_root():
+    return get_health_payload()
+
+@api_router.get("/health")
+async def health_check_api():
+    return get_health_payload()
 
 def get_db_connection():
     return pymysql.connect(

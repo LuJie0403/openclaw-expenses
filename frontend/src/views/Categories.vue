@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useExpenseStore } from '@/stores/expense'
 import { Chart } from '@antv/g2'
 import { formatNumber } from '@/utils/format'
@@ -122,6 +122,13 @@ onMounted(async () => {
   }
   
   setTimeout(initChart, 100)
+})
+
+onUnmounted(() => {
+  if (categoryChart) {
+    categoryChart.destroy()
+    categoryChart = null
+  }
 })
 </script>
 

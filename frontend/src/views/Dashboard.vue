@@ -40,6 +40,14 @@
       </a-col>
     </a-row>
 
+    <a-alert
+      v-if="errorMessage"
+      class="error-alert"
+      type="error"
+      show-icon
+      :message="errorMessage"
+    />
+
     <!-- 图表区域 -->
     <a-row :gutter="24" class="chart-section">
       <!-- 月度趋势图 -->
@@ -103,15 +111,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpenseStore } from '@/stores/expense'
 import { Chart } from '@antv/g2'
 import { formatNumber } from '@/utils/format'
+import dayjs from 'dayjs'
+import weekOfYear from 'dayjs/plugin/weekOfYear'
+
+dayjs.extend(weekOfYear)
 
 const expenseStore = useExpenseStore()
 
 // 状态
 const loading = computed(() => expenseStore.loading)
+const errorMessage = computed(() => expenseStore.error)
 const chartTimeRange = ref('12')
 const chartType = ref('pie')
 
@@ -120,7 +133,13 @@ const totalExpenses = computed(() => expenseStore.totalExpenses)
 const totalTransactions = computed(() => expenseStore.totalTransactions)
 const avgExpense = computed(() => expenseStore.avgExpense)
 const dateRange = computed(() => {
-  if (!expenseStore.summary) return '0天'
+  if (
+    !expenseStore.summary ||
+    !expenseStore.summary.earliest_date ||
+    !expenseStore.summary.latest_date
+  ) {
+    return '0天'
+  }
   const start = new Date(expenseStore.summary.earliest_date)
   const end = new Date(expenseStore.summary.latest_date)
   const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
@@ -288,7 +307,7 @@ const initHeatmapChart = () => {
   const calendarData = expenseStore.timeline.map(d => ({
     date: d.date,
     value: d.daily_total,
-    week: dayjs(d.date).day(), // 0 (Sun) - 6 (Sat)
+    week: dayjs(d.date).week(),
     day: dayjs(d.date).format('YYYY-MM-DD'),
   }));
 
@@ -351,6 +370,25 @@ watch(chartType, () => {
     initCategoryChart()
   }
 })
+
+onUnmounted(() => {
+  if (monthlyChart) {
+    monthlyChart.destroy()
+    monthlyChart = null
+  }
+  if (categoryChart) {
+    categoryChart.destroy()
+    categoryChart = null
+  }
+  if (paymentChart) {
+    paymentChart.destroy()
+    paymentChart = null
+  }
+  if (heatmapChart) {
+    heatmapChart.destroy()
+    heatmapChart = null
+  }
+})
 </script>
 
 <style scoped>
@@ -362,6 +400,10 @@ watch(chartType, () => {
 
 .stat-cards {
   margin-bottom: 24px;
+}
+
+.error-alert {
+  margin-bottom: 16px;
 }
 
 .stat-card {

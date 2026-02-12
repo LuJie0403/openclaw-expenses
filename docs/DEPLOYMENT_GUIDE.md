@@ -41,7 +41,7 @@
 1.  **停止旧服务**: 找到并停止所有相关的 uvicorn 进程。
     ```bash
     # 通过 pkill 模糊查找并停止
-    ssh openclaw-expenses@120.27.250.73 "pkill -f 'uvicorn app.main:app'"
+    ssh openclaw-expenses@120.27.250.73 "pkill -f 'uvicorn main_v2:app'"
     
     # 如果 pkill 失败，手动查找并 kill
     ssh openclaw-expenses@120.27.250.73 "ps aux | grep uvicorn"
@@ -77,7 +77,7 @@
     cd ~/apps/openclaw-expenses/backend
     source venv/bin/activate
     pip install --upgrade pip
-    pip install -r requirements.txt pydantic-settings
+    pip install -r requirements-jwt.txt
     "
     ```
 4.  **创建环境变量文件**:
@@ -87,10 +87,11 @@
     cat > .env <<EOF
     DB_HOST=127.0.0.1
     DB_PORT=3306
-    DB_USER=openclaw_aws
-    DB_PASSWORD=9!wQSw@12sq
-    DB_NAME=iterlife4openclaw
-    SECRET_KEY=openclaw_expenses_secret_key_2026
+    DB_USER=<YOUR_DB_USER>
+    DB_PASSWORD=<YOUR_DB_PASSWORD>
+    DB_NAME=<YOUR_DB_NAME>
+    SECRET_KEY=<GENERATE_A_STRONG_SECRET_KEY>
+    CORS_ORIGINS=https://<YOUR_FRONTEND_DOMAIN>
     EOF
     "
     ```
@@ -99,7 +100,7 @@
     ssh openclaw-expenses@120.27.250.73 "
     cd ~/apps/openclaw-expenses/backend
     source venv/bin/activate
-    nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
+    nohup uvicorn main_v2:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
     "
     ```
 
@@ -144,9 +145,9 @@
     -   **原因**: 服务器 `python3 -m venv` 创建的虚拟环境默认使用了极其老旧的 `pip` (9.0.3)，无法解析新版包的元数据。
     -   **解决方案**: 在安装依赖前，强制升级 `pip`：`pip install --upgrade pip`。
 
-2.  **问题**: 后端启动后迅速失败，日志提示 `ModuleNotFoundError: No module named 'pydantic._internal._signature'`。
-    -   **原因**: `pydantic-settings` 与 `requirements.txt` 中锁定的旧版 `pydantic` (2.5.0) 不兼容。
-    -   **解决方案**: 从 `requirements.txt` 中移除 `pydantic` 的版本锁定，然后执行 `pip install -r requirements.txt pydantic-settings`，让 `pip` 自动解析并安装最新兼容的 `pydantic` 和 `pydantic-settings`。
+2.  **问题**: 后端启动后迅速失败，日志提示 `ModuleNotFoundError: No module named 'jose'` 或 `No module named 'passlib'`。
+    -   **原因**: 运行入口 `main_v2.py` 依赖 JWT 和密码哈希组件，但安装了不含认证依赖的 requirements 文件。
+    -   **解决方案**: 使用 `pip install -r requirements-jwt.txt`，确保安装 `python-jose[cryptography]` 与 `passlib[bcrypt]`。
 
 3.  **问题**: 创建虚拟环境时，使用的是 Python 3.6 而非预期的 3.9。
     -   **原因**: 服务器上 `python3` 命令链接的是 Python 3.6.8，而 `python3.9` 才是新版本。
