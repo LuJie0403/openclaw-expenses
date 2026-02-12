@@ -1,4 +1,5 @@
-
+from typing import Dict
+from ..core.database import get_db_connection
 
 def get_stardust_data() -> Dict:
     conn = get_db_connection()
