@@ -28,7 +28,9 @@ export const useExpenseStore = defineStore('expense', () => {
   // 方法
   const fetchSummary = async () => {
     try {
-      summary.value = await expenseAPI.getSummary()
+      const response = await expenseAPI.getSummary()
+      console.log('DEBUG [fetchSummary]:', response)
+      summary.value = response
     } catch (err) {
       error.value = '获取支出总览失败'
       console.error(err)

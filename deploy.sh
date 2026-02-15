@@ -29,10 +29,13 @@ if [ ! -f ".env.development" ]; then
 fi
 
 echo "📥 安装Python依赖..."
-pip install -r requirements-minimal.txt
+pip install -r requirements.txt
 
 echo "🚀 启动后端服务..."
-nohup uvicorn main_v2:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+# 杀死旧进程以防端口占用
+pkill -f "uvicorn app.main:app" || true
+sleep 2
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
 BACKEND_PID=$!
 echo "✅ 后端服务已启动，PID: $BACKEND_PID"
 

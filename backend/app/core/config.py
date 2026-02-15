@@ -1,24 +1,29 @@
-
-import os
+# backend/app/core/config.py
 from pydantic_settings import BaseSettings
+from typing import List
 
 class Settings(BaseSettings):
-    DB_HOST: str = "127.0.0.1"
-    DB_PORT: int = 3306
-    DB_USER: str = "root"
-    DB_PASSWORD: str = ""
-    DB_NAME: str = "openclaw_expenses"
+    # Project Info
+    PROJECT_NAME: str = "钱呢 API (Where Is My Money)"
+    PROJECT_VERSION: str = "1.1.5"
     
-    SECRET_KEY: str = "your-secret-key"
+    # Database
+    DB_HOST: str
+    DB_PORT: int
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_NAME: str
+
+    # JWT
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    PROJECT_NAME: str = "OpenClaw Expenses API"
-    PROJECT_VERSION: str = "2.1.0-refactored"
+    # CORS
+    BACKEND_CORS_ORIGINS: List[str] = ["*"]
 
     class Config:
         env_file = ".env"
-        # Handle case where .env is in parent directory
-        env_file_encoding = 'utf-8'
+        env_file_encoding = "utf-8"
 
 settings = Settings()

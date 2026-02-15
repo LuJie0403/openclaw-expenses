@@ -4,12 +4,13 @@ import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 // Determine API base URL
 const API_BASE_URL = import.meta.env.PROD 
   ? '/api' // In production (Nginx proxy), use relative path
-  : 'http://localhost:8000' // In development, point to local backend (or proxy if Vite config handles it)
+  : '/api' // In development, also use proxy
+
 
 // Create Axios instance
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased timeout
   headers: {
     'Content-Type': 'application/json'
   }
