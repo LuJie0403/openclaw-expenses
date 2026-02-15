@@ -1,4 +1,3 @@
-# backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,22 +13,26 @@ app = FastAPI(
 )
 
 # CORS Middleware
-if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# Allow all origins for simplicity in this deployment context, or use settings
+origins = settings.BACKEND_CORS_ORIGINS if settings.BACKEND_CORS_ORIGINS else ["*"]
 
-# API Routers
-api_router = FastAPI()
-api_router.include_router(auth_router.router, prefix="/auth", tags=["auth"])
-api_router.include_router(expenses_router.router, prefix="/expenses", tags=["expenses"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[str(origin) for origin in origins],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app.include_router(api_router, prefix="/api")
+# Include Routers
+app.include_router(auth_router.router, prefix="/api/auth", tags=["auth"])
+app.include_router(expenses_router.router, prefix="/api/expenses", tags=["expenses"])
 
-@app.get("/health", tags=["health"])
+# Health Check Endpoint
+@app.get("/api/health", tags=["health"])
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "version": settings.PROJECT_VERSION, "app": "openclaw-expenses"}
+
+@app.get("/")
+async def root():
+    return {"message": "OpenClaw Expenses API is running. Visit /docs for documentation."}
