@@ -72,7 +72,7 @@
 1. 多图表页面缺少统一销毁逻辑
    - 证据：
      - `frontend/src/views/Dashboard.vue:137`~`frontend/src/views/Dashboard.vue:140` 创建多个图表实例，但无 `onUnmounted` 销毁
-     - `frontend/src/views/Categories.vue`、`frontend/src/views/Payment.vue`、`frontend/src/views/Timeline.vue` 同类模式
+     - `frontend/src/views/Categories.vue`、`frontend/src/views/Payment.vue` 同类模式
    - 风险：路由频繁切换时内存和渲染资源累积。
 
 2. 错误处理链路不完整
