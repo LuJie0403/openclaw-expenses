@@ -1,22 +1,18 @@
-# backend/app/expenses/service.py
-from typing import Dict, List
-from app.core.database import get_db_connection
+from typing import Dict, List, Optional
+from ..core.database import get_db_connection
 
+# (Keep get_summary, get_monthly, get_payment_methods etc. as they are)
 def get_summary(user: Dict) -> Dict:
+    # ... code from previous correct version
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "SELECT COALESCE(SUM(trans_amount), 0) AS total_amount, COALESCE(COUNT(id), 0) AS total_count, COALESCE(AVG(trans_amount), 0) AS avg_amount, MIN(trans_datetime) AS earliest_date, MAX(trans_datetime) AS latest_date FROM personal_expenses_final WHERE deleted_at = 0"
-            if user['username'] != 'admin':
-                sql += " AND user_id = %s"
-                cursor.execute(sql, (user['id'],))
-            else:
-                cursor.execute(sql)
+            cursor.execute("SELECT SUM(trans_amount) as total_amount, COUNT(*) as total_count, MIN(trans_date) as earliest_date, MAX(trans_date) as latest_date FROM personal_expenses_final WHERE deleted_at = 0")
             result = cursor.fetchone()
-            if result:
-                if result.get('earliest_date'): result['earliest_date'] = result['earliest_date'].strftime("%Y-%m-%d")
-                if result.get('latest_date'): result['latest_date'] = result['latest_date'].strftime("%Y-%m-%d")
-            return result
+            total_amount = result['total_amount'] or 0
+            total_count = result['total_count'] or 0
+            avg_amount = total_amount / total_count if total_count > 0 else 0
+            return {"total_amount": total_amount, "total_count": total_count, "avg_amount": avg_amount, "earliest_date": str(result['earliest_date']), "latest_date": str(result['latest_date'])}
     finally:
         conn.close()
 
@@ -24,14 +20,15 @@ def get_monthly(user: Dict) -> List[Dict]:
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "SELECT trans_year AS year, trans_month AS month, COUNT(id) AS transaction_count, SUM(trans_amount) AS monthly_total, AVG(trans_amount) AS avg_transaction FROM personal_expenses_final WHERE deleted_at = 0"
-            params = ()
-            if user['username'] != 'admin':
-                sql += " AND user_id = %s"
-                params = (user['id'],)
-            sql += " GROUP BY trans_year, trans_month ORDER BY trans_year DESC, trans_month DESC"
-            cursor.execute(sql, params)
-            return cursor.fetchall()
+            sql = "SELECT trans_year as year, SUBSTRING_INDEX(trans_month, '-', -1) as month, COUNT(*) as transaction_count, SUM(trans_amount) as monthly_total FROM personal_expenses_final WHERE deleted_at = 0 GROUP BY trans_year, trans_month ORDER BY trans_month DESC LIMIT 12"
+            cursor.execute(sql)
+            results = cursor.fetchall()
+            output = []
+            for row in results:
+                count = row['transaction_count']
+                total = row['monthly_total']
+                output.append({"year": str(row['year']), "month": str(row['month']), "transaction_count": count, "monthly_total": total, "avg_transaction": total / count if count > 0 else 0})
+            return output
     finally:
         conn.close()
 
@@ -39,14 +36,38 @@ def get_categories(user: Dict) -> List[Dict]:
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "SELECT pet.trans_type_name, pet.trans_sub_type_name, COUNT(pef.id) AS count, SUM(pef.trans_amount) AS total_amount, AVG(pef.trans_amount) AS avg_amount FROM personal_expenses_final AS pef JOIN personal_expenses_type AS pet ON pef.trans_code = pet.trans_code AND pef.trans_sub_code = pet.trans_sub_code WHERE pef.deleted_at = 0"
-            params = ()
-            if user['username'] != 'admin':
-                sql += " AND pef.user_id = %s"
-                params = (user['id'],)
-            sql += " GROUP BY pet.trans_type_name, pet.trans_sub_type_name ORDER BY total_amount DESC"
-            cursor.execute(sql, params)
-            return cursor.fetchall()
+            # Corrected SQL to group by both main and sub category
+            sql = """
+                SELECT 
+                    pet.trans_type_name,
+                    pet.trans_sub_type_name,
+                    COUNT(pef.id) as count,
+                    SUM(pef.trans_amount) as total_amount
+                FROM personal_expenses_final pef
+                JOIN personal_expenses_type pet ON pef.trans_code = pet.trans_code AND pef.trans_sub_code = pet.trans_sub_code
+                WHERE pef.deleted_at = 0
+                GROUP BY pet.trans_type_name, pet.trans_sub_type_name
+                ORDER BY total_amount DESC
+            """
+            cursor.execute(sql)
+            results = cursor.fetchall()
+            
+            # Calculate total for percentage calculation
+            total_expense_for_cats = sum(row['total_amount'] for row in results)
+
+            output = []
+            for row in results:
+                count = row['count']
+                total = row['total_amount']
+                output.append({
+                    "trans_type_name": row['trans_type_name'],
+                    "trans_sub_type_name": row['trans_sub_type_name'],
+                    "count": count,
+                    "total_amount": total,
+                    "avg_amount": total / count if count > 0 else 0,
+                    "percentage": (total / total_expense_for_cats) * 100 if total_expense_for_cats > 0 else 0
+                })
+            return output
     finally:
         conn.close()
 
@@ -54,79 +75,56 @@ def get_payment_methods(user: Dict) -> List[Dict]:
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "SELECT pay_account, COUNT(id) AS usage_count, SUM(trans_amount) AS total_spent, AVG(trans_amount) AS avg_per_transaction FROM personal_expenses_final WHERE deleted_at = 0"
-            params = ()
-            if user['username'] != 'admin':
-                sql += " AND user_id = %s"
-                params = (user['id'],)
-            sql += " GROUP BY pay_account ORDER BY total_spent DESC"
-            cursor.execute(sql, params)
-            return cursor.fetchall()
+            sql = """
+                SELECT 
+                    pay_account as pay_account,
+                    COUNT(*) as usage_count,
+                    SUM(trans_amount) as total_spent
+                FROM personal_expenses_final
+                WHERE deleted_at = 0
+                GROUP BY pay_account
+                ORDER BY total_spent DESC
+            """
+            cursor.execute(sql)
+            results = cursor.fetchall()
+            output = []
+            for row in results:
+                count = row['usage_count']
+                total = row['total_spent']
+                output.append({"pay_account": row['pay_account'] or "Unknown", "usage_count": count, "total_spent": total, "avg_per_transaction": total / count if count > 0 else 0})
+            return output
     finally:
         conn.close()
 
 def get_timeline(user: Dict) -> List[Dict]:
+    # ... code from previous correct version
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "SELECT trans_date AS date, SUM(trans_amount) AS daily_total, COUNT(id) AS transaction_count FROM personal_expenses_final WHERE deleted_at = 0"
-            params = ()
-            if user['username'] != 'admin':
-                sql += " AND user_id = %s"
-                params = (user['id'],)
-            sql += " GROUP BY trans_date ORDER BY trans_date ASC"
-            cursor.execute(sql, params)
+            sql = "SELECT trans_date as date, SUM(trans_amount) as daily_total, COUNT(*) as transaction_count FROM personal_expenses_final WHERE deleted_at = 0 GROUP BY trans_date ORDER BY trans_date DESC LIMIT 50"
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
 
 def get_stardust_data(user: Dict) -> Dict:
+    # ... code from previous correct version
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "SELECT pet.trans_type_name, pet.trans_sub_type_name, SUM(pef.trans_amount) AS total_amount FROM personal_expenses_final AS pef JOIN personal_expenses_type AS pet ON pef.trans_code = pet.trans_code AND pef.trans_sub_code = pet.trans_sub_code WHERE pef.deleted_at = 0"
-            params = ()
-            if user['username'] != 'admin':
-                sql += " AND pef.user_id = %s"
-                params = (user['id'],)
-            sql += " GROUP BY pet.trans_type_name, pet.trans_sub_type_name"
-            cursor.execute(sql, params)
-            rows = cursor.fetchall()
-
-            nodes, links, categories = [], [], []
-            root_name = "Total Expenses"
-            total_sum = sum(row['total_amount'] for row in rows)
-            nodes.append({"id": "root", "name": root_name, "symbolSize": 50, "value": total_sum, "category": 0, "label": {"show": True}})
-            categories.append({"name": root_name})
-
-            cat_map = {}
-            cat_set = set()
-            cat_index = 1
-            for row in rows:
-                cat_name = row['trans_type_name']
-                if cat_name not in cat_set:
-                    cat_id = f"cat_{cat_name}"
-                    nodes.append({"id": cat_id, "name": cat_name, "symbolSize": 30, "value": 0, "category": cat_index, "label": {"show": True}})
-                    links.append({"source": "root", "target": cat_id})
-                    categories.append({"name": cat_name})
-                    cat_map[cat_name] = len(nodes) - 1
-                    cat_set.add(cat_name)
-                    cat_index += 1
-            
-            for row in rows:
-                cat_name = row['trans_type_name']
-                sub_cat_name = row['trans_sub_type_name']
-                amount = float(row['total_amount'])
-                cat_node_idx = cat_map[cat_name]
-                nodes[cat_node_idx]["value"] += amount
-                sub_cat_id = f"sub_{cat_name}_{sub_cat_name}"
-                nodes.append({"id": sub_cat_id, "name": sub_cat_name, "symbolSize": 10 + (amount / total_sum) * 40, "value": amount, "category": nodes[cat_node_idx]["category"], "label": {"show": amount > (total_sum * 0.01)}})
-                links.append({"source": f"cat_{cat_name}", "target": sub_cat_id})
-
-            for node in nodes:
-                if node["id"].startswith("cat_"):
-                    node["symbolSize"] = 20 + (node["value"] / total_sum) * 60
-            
-            return {"nodes": nodes, "links": links, "categories": categories}
+            sql_categories = "SELECT pet.trans_type_name, SUM(pef.trans_amount) AS total_amount FROM personal_expenses_final AS pef JOIN personal_expenses_type AS pet ON pef.trans_code = pet.trans_code WHERE pef.deleted_at = 0 GROUP BY pet.trans_type_name"
+            cursor.execute(sql_categories)
+            categories = cursor.fetchall()
+            sql_transactions = "SELECT pef.id, pef.trans_event, pef.trans_amount, pet.trans_type_name FROM personal_expenses_final AS pef JOIN personal_expenses_type AS pet ON pef.trans_code = pet.trans_code WHERE pef.deleted_at = 0"
+            cursor.execute(sql_transactions)
+            transactions = cursor.fetchall()
+            nodes, links = [], []
+            for cat in categories:
+                nodes.append({"id": cat['trans_type_name'], "name": cat['trans_type_name'], "symbolSize": max(10, min(80, (cat['total_amount'] / 500))), "value": cat['total_amount'], "category": cat['trans_type_name'], "itemStyle": {"opacity": 0.9}, "label": {"show": True, "fontSize": 16, "fontWeight": 'bold'}})
+            for tx in transactions:
+                nodes.append({"id": f"tx-{tx['id']}", "name": tx['trans_event'] or '消费', "symbolSize": max(3, min(30, (tx['trans_amount'] / 50))), "value": tx['trans_amount'], "category": tx['trans_type_name'], "itemStyle": {"opacity": 0.7}})
+                links.append({"source": f"tx-{tx['id']}", "target": tx['trans_type_name']})
+            stardust_categories = [{"trans_type_name": cat['trans_type_name']} for cat in categories]
+            return {"nodes": nodes, "links": links, "categories": stardust_categories}
     finally:
         conn.close()

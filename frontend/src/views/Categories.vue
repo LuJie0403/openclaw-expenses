@@ -1,182 +1,62 @@
+<!-- Categories.vue -->
 <template>
   <div class="categories-container">
     <a-card title="支出分类分析" class="main-card">
-      <div class="chart-section">
-        <div ref="categoryChartRef" class="chart-container"></div>
-      </div>
-      
+      <!-- Chart Section -->
+      <div ref="categoryChartRef" style="height: 400px; width: 100%;"></div>
       <a-divider />
-      
-      <div class="category-list">
-        <h3>分类详情</h3>
-        <a-table
-          :columns="columns"
-          :data-source="expenseStore.categories"
-          :pagination="{ pageSize: 10 }"
-          row-key="trans_sub_type_name"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'total_amount'">
-              <span class="amount-text">¥{{ formatNumber(record.total_amount) }}</span>
-            </template>
-            <template v-if="column.key === 'avg_amount'">
-              <span class="avg-text">¥{{ formatNumber(record.avg_amount) }}</span>
-            </template>
-          </template>
-        </a-table>
-      </div>
+      <!-- Table Section -->
+      <h3>分类详情</h3>
+      <a-table :columns="categoryColumns" :data-source="expenseStore.categories" :pagination="{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items` }" row-key="trans_sub_type_name" size="middle">
+        <template #bodyCell="{ column, record, index }">
+          <template v-if="column.key === 'rowIndex'">{{ index + 1 }}</template>
+          <template v-if="column.key === 'total_amount'"><span style="color: #ff4d4f;">¥{{ formatNumber(record.total_amount) }}</span></template>
+          <template v-if="column.key === 'avg_amount'"><span style="color: #40a9ff;">¥{{ formatNumber(record.avg_amount) }}</span></template>
+          <template v-if="column.key === 'percentage'"><span>{{ record.percentage.toFixed(2) }}%</span></template>
+        </template>
+      </a-table>
     </a-card>
   </div>
 </template>
-
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useExpenseStore } from '@/stores/expense'
-import { Chart } from '@antv/g2'
-import { formatNumber } from '@/utils/format'
+// ... (imports)
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useExpenseStore } from '@/stores/expense';
+import { Chart } from '@antv/g2';
+import { formatNumber } from '@/utils/format';
 
-const expenseStore = useExpenseStore()
-const categoryChartRef = ref<HTMLElement>()
+const expenseStore = useExpenseStore();
+const categoryChartRef = ref<HTMLElement>();
 
-const columns = [
-  {
-    title: '主分类',
-    dataIndex: 'trans_type_name',
-    key: 'trans_type_name',
-    width: 120,
-  },
-  {
-    title: '子分类',
-    dataIndex: 'trans_sub_type_name',
-    key: 'trans_sub_type_name',
-  },
-  {
-    title: '交易笔数',
-    dataIndex: 'count',
-    key: 'count',
-    align: 'center',
-    width: 100,
-  },
-  {
-    title: '总金额',
-    dataIndex: 'total_amount',
-    key: 'total_amount',
-    align: 'right',
-    width: 120,
-  },
-  {
-    title: '平均金额',
-    dataIndex: 'avg_amount',
-    key: 'avg_amount',
-    align: 'right',
-    width: 120,
-  },
-]
+const categoryColumns = [
+  { title: '#', key: 'rowIndex', width: 60, align: 'center' },
+  { title: '主分类', dataIndex: 'trans_type_name', sorter: (a, b) => a.trans_type_name.localeCompare(b.trans_type_name) },
+  { title: '子分类', dataIndex: 'trans_sub_type_name', sorter: (a, b) => a.trans_sub_type_name.localeCompare(b.trans_sub_type_name) },
+  { title: '交易笔数', dataIndex: 'count', sorter: (a, b) => a.count - b.count, align: 'right' },
+  { title: '总金额', dataIndex: 'total_amount', key: 'total_amount', sorter: (a, b) => a.total_amount - b.total_amount, defaultSortOrder: 'descend', align: 'right' },
+  { title: '平均金额', dataIndex: 'avg_amount', key: 'avg_amount', sorter: (a, b) => a.avg_amount - b.avg_amount, align: 'right' },
+  { title: '金额占比', dataIndex: 'percentage', key: 'percentage', sorter: (a, b) => a.percentage - b.percentage, align: 'right' },
+];
 
-let categoryChart: Chart | null = null
-
+let chart: Chart | null = null;
 const initChart = () => {
-  if (!categoryChartRef.value || !expenseStore.categories.length) return
-
-  categoryChart = new Chart({
-    container: categoryChartRef.value,
-    autoFit: true,
-    height: 400,
-  })
-  
-  categoryChart.theme({ type: 'classicDark' });
-
-  const data = expenseStore.categories.slice(0, 15)
-
-  categoryChart
-    .interval()
-    .data(data)
-    .encode('x', 'trans_sub_type_name')
-    .encode('y', 'total_amount')
-    .encode('color', 'trans_type_name')
-    .scale('y', { nice: true })
-    .axis('x', { 
-      title: '消费类别',
-      label: { autoRotate: true, autoHide: true }
-    })
-    .axis('y', { 
-      title: '支出金额 (¥)',
-      labelFormatter: (value: number) => `¥${(value / 1000).toFixed(0)}K`
-    })
-    .tooltip({
-      items: [
-        { name: '类别', field: 'trans_sub_type_name' },
-        { name: '金额', field: 'total_amount', valueFormatter: (value: number) => `¥${formatNumber(value)}` },
-        { name: '笔数', field: 'count' }
-      ]
-    })
-    .legend({ position: 'top' })
-    .animate({ enter: { type: 'scaleInY' } })
-
-  categoryChart.render()
-}
+  if (!categoryChartRef.value || !expenseStore.categories.length) return;
+  chart = new Chart({ container: categoryChartRef.value, autoFit: true, height: 400 });
+  chart.theme({ type: 'classicDark' });
+  chart.data(expenseStore.categories.slice(0, 20));
+  chart.interval().encode('x', 'trans_sub_type_name').encode('y', 'total_amount').encode('color', 'trans_type_name').axis('x', { label: { autoRotate: true } }).tooltip({ items: [{ name: '金额', channel: 'y', valueFormatter: (d) => `¥${formatNumber(d)}` }] });
+  chart.render();
+};
 
 onMounted(async () => {
-  if (!expenseStore.categories.length) {
-    await expenseStore.fetchCategories()
-  }
-  
-  setTimeout(initChart, 100)
-})
+  if (!expenseStore.categories.length) await expenseStore.fetchCategories();
+  initChart();
+});
 
-onUnmounted(() => {
-  categoryChart?.destroy()
-})
+onUnmounted(() => chart?.destroy());
 </script>
-
 <style scoped>
-.categories-container {
-  padding: 20px;
-  min-height: calc(100vh - 64px);
-  /* background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); REMOVED */
-}
-
-.main-card {
-  background: rgba(25, 25, 25, 0.6);
-  backdrop-filter: blur(10px);
-  border: 1px solid #333;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.chart-section {
-  margin-bottom: 24px;
-}
-
-.chart-container {
-  height: 400px;
-  width: 100%;
-}
-
-.category-list {
-  margin-top: 24px;
-}
-
-.category-list h3 {
-  color: #fff;
-}
-
-.amount-text {
-  font-weight: 600;
-  color: #ff4d4f; /* Brighter red for dark mode */
-}
-
-.avg-text {
-  color: #40a9ff; /* Brighter blue for dark mode */
-}
-
-@media (max-width: 768px) {
-  .categories-container {
-    padding: 12px;
-  }
-  
-  .chart-container {
-    height: 300px;
-  }
-}
+.categories-container { padding: 20px; }
+.main-card { background: rgba(25, 25, 25, 0.6); border: 1px solid #333; }
+h3 { color: #fff; }
 </style>

@@ -10,7 +10,7 @@ const API_BASE_URL = import.meta.env.PROD
 // Create Axios instance
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased timeout
   headers: {
     'Content-Type': 'application/json'
   }
