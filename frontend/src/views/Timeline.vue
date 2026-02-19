@@ -100,6 +100,8 @@ type TimelinePoint = {
 
 type MonthPoint = {
   month: string
+  year: number
+  monthNumber: number
   monthly_total: number
   transaction_count: number
 }
@@ -120,6 +122,31 @@ const chartInstances: Record<string, echarts.ECharts | null> = {
   monthly: null,
 }
 
+const parseYearMonth = (yearRaw: unknown, monthRaw: unknown): { year: number; monthNumber: number } | null => {
+  const directYear = Number(yearRaw)
+  const directMonth = Number(monthRaw)
+  if (Number.isFinite(directYear) && Number.isFinite(directMonth) && directMonth >= 1 && directMonth <= 12) {
+    return { year: directYear, monthNumber: directMonth }
+  }
+
+  const monthText = String(monthRaw ?? '').trim()
+  const fullMatch = monthText.match(/(\d{4})[-/.年](\d{1,2})/)
+  if (fullMatch) {
+    const year = Number(fullMatch[1])
+    const monthNumber = Number(fullMatch[2])
+    if (Number.isFinite(year) && monthNumber >= 1 && monthNumber <= 12) {
+      return { year, monthNumber }
+    }
+  }
+
+  const monthOnly = Number(monthText)
+  if (Number.isFinite(directYear) && Number.isFinite(monthOnly) && monthOnly >= 1 && monthOnly <= 12) {
+    return { year: directYear, monthNumber: monthOnly }
+  }
+
+  return null
+}
+
 const fullTimeline = computed<TimelinePoint[]>(() =>
   expenseStore.timeline
     .map((item) => ({
@@ -132,11 +159,18 @@ const fullTimeline = computed<TimelinePoint[]>(() =>
 
 const monthlyTimeline = computed<MonthPoint[]>(() =>
   expenseStore.monthlyExpenses
-    .map((item) => ({
-      month: `${item.year}-${String(item.month).padStart(2, '0')}`,
-      monthly_total: Number(item.monthly_total || 0),
-      transaction_count: Number(item.transaction_count || 0),
-    }))
+    .map((item) => {
+      const parsed = parseYearMonth(item.year, item.month)
+      if (!parsed) return null
+      return {
+        month: `${parsed.year}-${String(parsed.monthNumber).padStart(2, '0')}`,
+        year: parsed.year,
+        monthNumber: parsed.monthNumber,
+        monthly_total: Number(item.monthly_total || 0),
+        transaction_count: Number(item.transaction_count || 0),
+      }
+    })
+    .filter((item): item is MonthPoint => item !== null)
     .sort((left, right) => dayjs(`${left.month}-01`).valueOf() - dayjs(`${right.month}-01`).valueOf()),
 )
 
@@ -389,9 +423,9 @@ const renderYearTrendChart = () => {
   const yearBuckets = new Map<string, Array<number | null>>()
 
   filteredMonthly.value.forEach((item) => {
-    const [year, month] = item.month.split('-')
-    const monthIndex = Number(month) - 1
+    const monthIndex = item.monthNumber - 1
     if (monthIndex < 0 || monthIndex > 11) return
+    const year = String(item.year)
     if (!yearBuckets.has(year)) {
       yearBuckets.set(year, Array(12).fill(null))
     }
