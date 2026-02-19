@@ -36,12 +36,28 @@ const stardustData = ref<{
 } | null>(null)
 const authStore = useAuthStore();
 const onResize = () => {
-  if (chartInstance) {
+  if (chartInstance && stardustData.value) {
+    renderChart();
+  } else if (chartInstance) {
     chartInstance.resize();
   }
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+const splitEvenly = (items: string[], groups: number) => {
+  if (!items.length) return [] as string[][];
+  const normalizedGroups = Math.max(1, Math.min(groups, items.length));
+  const base = Math.floor(items.length / normalizedGroups);
+  const remainder = items.length % normalizedGroups;
+  const chunks: string[][] = [];
+  let cursor = 0;
+  for (let i = 0; i < normalizedGroups; i++) {
+    const size = base + (i < remainder ? 1 : 0);
+    chunks.push(items.slice(cursor, cursor + size));
+    cursor += size;
+  }
+  return chunks;
+};
 
 const normalizeStardustPayload = (payload: any) => {
   const rawNodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
@@ -115,6 +131,14 @@ const renderChart = () => {
 
   chartInstance = echarts.init(chartContainer.value)
   const data = stardustData.value
+  const categoryNames = data.categories.map((c: any) => String(c.name ?? '未分类'));
+  const containerWidth = chartContainer.value.clientWidth || window.innerWidth || 1200;
+  const maxItemsPerRow = containerWidth >= 1400 ? 7 : containerWidth >= 1200 ? 6 : containerWidth >= 900 ? 5 : containerWidth >= 700 ? 4 : 3;
+  const rowCount = Math.max(1, Math.ceil(categoryNames.length / maxItemsPerRow));
+  const legendRows = splitEvenly(categoryNames, rowCount);
+  const legendTop = 10;
+  const legendRowHeight = 28;
+  const legendBottom = legendTop + legendRows.length * legendRowHeight;
 
   const option = {
     backgroundColor: 'transparent',
@@ -122,13 +146,27 @@ const renderChart = () => {
       formatter: (params: any) =>
         params.dataType === 'node' ? `${params.name}: ¥${formatAmount(Number(params.value || 0))}` : '',
     },
-    legend: [{ data: data.categories.map((c: any) => c.name), textStyle: { color: '#fff' } }],
+    legend: legendRows.map((row, index) => ({
+      type: 'plain',
+      orient: 'horizontal',
+      top: legendTop + index * legendRowHeight,
+      left: 'center',
+      icon: 'circle',
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 14,
+      selectedMode: true,
+      data: row,
+      textStyle: { color: '#fff' },
+    })),
     series: [{
         type: 'graph',
         layout: 'force',
         data: data.nodes,
         links: data.links,
         categories: data.categories,
+        top: legendBottom + 8,
+        bottom: 8,
         roam: true,
         label: { position: 'right', color: '#fff', show: false },
         force: { repulsion: 150, gravity: 0.1, edgeLength: [100, 250], layoutAnimation: false },
