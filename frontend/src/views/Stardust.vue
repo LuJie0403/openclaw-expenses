@@ -136,9 +136,10 @@ const renderChart = () => {
   const maxItemsPerRow = containerWidth >= 1400 ? 7 : containerWidth >= 1200 ? 6 : containerWidth >= 900 ? 5 : containerWidth >= 700 ? 4 : 3;
   const rowCount = Math.max(1, Math.ceil(categoryNames.length / maxItemsPerRow));
   const legendRows = splitEvenly(categoryNames, rowCount);
-  const legendTop = 10;
   const legendRowHeight = 28;
-  const legendBottom = legendTop + legendRows.length * legendRowHeight;
+  const legendBottomPadding = 8;
+  const legendBlockHeight = legendRows.length * legendRowHeight;
+  const graphBottomPadding = legendBottomPadding + legendBlockHeight + 8;
 
   const option = {
     backgroundColor: 'transparent',
@@ -149,7 +150,7 @@ const renderChart = () => {
     legend: legendRows.map((row, index) => ({
       type: 'plain',
       orient: 'horizontal',
-      top: legendTop + index * legendRowHeight,
+      bottom: legendBottomPadding + (legendRows.length - 1 - index) * legendRowHeight,
       left: 'center',
       icon: 'circle',
       itemWidth: 10,
@@ -165,8 +166,8 @@ const renderChart = () => {
         data: data.nodes,
         links: data.links,
         categories: data.categories,
-        top: legendBottom + 8,
-        bottom: 8,
+        top: 8,
+        bottom: graphBottomPadding,
         roam: true,
         label: { position: 'right', color: '#fff', show: false },
         force: { repulsion: 150, gravity: 0.1, edgeLength: [100, 250], layoutAnimation: false },

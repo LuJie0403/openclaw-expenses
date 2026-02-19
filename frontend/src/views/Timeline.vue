@@ -3,7 +3,7 @@
     <div class="hero-panel">
       <div>
         <h2>时间洞察中心</h2>
-        <p>从日、周、月三个尺度观察消费节奏，定位高峰与结构变化。</p>
+        <p>从日、周、月、年四个尺度观察消费节奏，定位高峰与结构变化。</p>
       </div>
       <div class="hero-actions">
         <a-radio-group v-model:value="selectedRange" size="small" button-style="solid">
@@ -70,8 +70,8 @@
 
     <a-row :gutter="16" class="panel-row">
       <a-col :xs="24" :lg="14">
-        <a-card title="周度热力矩阵" class="panel-card">
-          <div ref="heatmapRef" class="chart-box" />
+        <a-card title="By年走势对比（月度支出）" class="panel-card">
+          <div ref="yearTrendRef" class="chart-box" />
         </a-card>
       </a-col>
       <a-col :xs="24" :lg="10">
@@ -110,13 +110,13 @@ const isLoading = ref(false)
 
 const dailyPulseRef = ref<HTMLElement>()
 const weekdayRef = ref<HTMLElement>()
-const heatmapRef = ref<HTMLElement>()
+const yearTrendRef = ref<HTMLElement>()
 const monthlyRef = ref<HTMLElement>()
 
 const chartInstances: Record<string, echarts.ECharts | null> = {
   dailyPulse: null,
   weekday: null,
-  heatmap: null,
+  yearTrend: null,
   monthly: null,
 }
 
@@ -375,92 +375,79 @@ const renderWeekdayChart = () => {
   chartInstances.weekday = chart
 }
 
-const renderHeatmapChart = () => {
-  const chart = createChart(heatmapRef.value)
+const renderYearTrendChart = () => {
+  const chart = createChart(yearTrendRef.value)
   if (!chart) return
 
-  if (!filteredTimeline.value.length) {
-    setEmptyOption(chart, '暂无热力矩阵数据')
-    chartInstances.heatmap = chart
+  if (!filteredMonthly.value.length) {
+    setEmptyOption(chart, '暂无年度走势数据')
+    chartInstances.yearTrend = chart
     return
   }
 
-  const start = dayjs(filteredTimeline.value[0].date).startOf('week')
-  const end = dayjs(filteredTimeline.value[filteredTimeline.value.length - 1].date).endOf('week')
-  const weekCount = Math.max(end.diff(start, 'week') + 1, 1)
+  const monthLabels = Array.from({ length: 12 }, (_, i) => `${i + 1}月`)
+  const yearBuckets = new Map<string, Array<number | null>>()
 
-  const xLabels = Array.from({ length: weekCount }, (_, i) =>
-    dayjs(start).add(i, 'week').format('MM-DD'),
-  )
-
-  const yLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-  const weekdayIndexMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 0: 6 }
-
-  const heatData = filteredTimeline.value.map((item) => {
-    const current = dayjs(item.date)
-    const weekIndex = current.startOf('week').diff(start, 'week')
-    const dayIndex = weekdayIndexMap[current.day()]
-    return [weekIndex, dayIndex, Number(item.daily_total.toFixed(2)), item.transaction_count, item.date]
+  filteredMonthly.value.forEach((item) => {
+    const [year, month] = item.month.split('-')
+    const monthIndex = Number(month) - 1
+    if (monthIndex < 0 || monthIndex > 11) return
+    if (!yearBuckets.has(year)) {
+      yearBuckets.set(year, Array(12).fill(null))
+    }
+    const values = yearBuckets.get(year)
+    if (!values) return
+    values[monthIndex] = Number(item.monthly_total.toFixed(2))
   })
 
-  const maxAmount = Math.max(...filteredTimeline.value.map((item) => item.daily_total), 0)
+  const years = Array.from(yearBuckets.keys()).sort((a, b) => Number(a) - Number(b))
+  const series = years.map((year) => ({
+    name: year,
+    type: 'line',
+    data: yearBuckets.get(year),
+    smooth: true,
+    symbol: 'circle',
+    symbolSize: 6,
+    connectNulls: false,
+    lineStyle: { width: 2 },
+  }))
 
   chart.setOption({
     backgroundColor: 'transparent',
     tooltip: {
-      formatter: (params: any) => {
-        const [weekIndex, dayIndex, amount, trades, date] = params.data
-        return [
-          `${date}`,
-          `周序: ${xLabels[Number(weekIndex)]}`,
-          `星期: ${yLabels[Number(dayIndex)]}`,
-          `日支出: ¥${formatAmount(Number(amount))}`,
-          `交易笔数: ${trades}笔`,
-        ].join('<br/>')
+      trigger: 'axis',
+      axisPointer: { type: 'line' },
+      formatter: (params: any[]) => {
+        const title = params?.[0]?.axisValueLabel || ''
+        const lines = (params || [])
+          .filter((p) => p.value !== null && p.value !== undefined)
+          .map((p) => `${p.marker}${p.seriesName}: ¥${formatAmount(Number(p.value))}`)
+        return [title, ...lines].join('<br/>')
       },
     },
-    grid: { left: 64, right: 24, top: 18, bottom: 62 },
+    legend: {
+      data: years,
+      textStyle: { color: '#d9d9d9' },
+      top: 4,
+    },
+    grid: { left: 56, right: 24, top: 50, bottom: 40 },
     xAxis: {
       type: 'category',
-      data: xLabels,
-      axisLabel: { color: '#8c8c8c', interval: Math.max(Math.floor(xLabels.length / 8), 0) },
-      axisLine: { lineStyle: { color: '#434343' } },
-    },
-    yAxis: {
-      type: 'category',
-      data: yLabels,
+      data: monthLabels,
       axisLabel: { color: '#8c8c8c' },
       axisLine: { lineStyle: { color: '#434343' } },
     },
-    visualMap: {
-      min: 0,
-      max: Math.max(maxAmount, 1),
-      calculable: true,
-      orient: 'horizontal',
-      left: 'center',
-      bottom: 8,
-      text: ['高', '低'],
-      textStyle: { color: '#8c8c8c' },
-      inRange: {
-        color: ['#1b1f3a', '#225ea8', '#41b6c4', '#7fcdbb', '#fed976', '#ff6b6b'],
-      },
+    yAxis: {
+      type: 'value',
+      name: '金额（元）',
+      nameTextStyle: { color: '#8c8c8c' },
+      axisLabel: { color: '#8c8c8c', formatter: (value: number) => `¥${formatAmount(value)}` },
+      splitLine: { lineStyle: { color: '#262626' } },
     },
-    series: [
-      {
-        type: 'heatmap',
-        data: heatData,
-        label: { show: false },
-        emphasis: {
-          itemStyle: {
-            shadowBlur: 10,
-            shadowColor: 'rgba(0, 0, 0, 0.5)',
-          },
-        },
-      },
-    ],
+    series,
   })
 
-  chartInstances.heatmap = chart
+  chartInstances.yearTrend = chart
 }
 
 const renderMonthlyChart = () => {
@@ -558,7 +545,7 @@ const renderAllCharts = async () => {
   disposeCharts()
   renderDailyPulseChart()
   renderWeekdayChart()
-  renderHeatmapChart()
+  renderYearTrendChart()
   renderMonthlyChart()
 }
 
