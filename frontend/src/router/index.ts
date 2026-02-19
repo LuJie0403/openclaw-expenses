@@ -47,7 +47,7 @@ const router = createRouter({
       name: 'timeline',
       component: Timeline,
       meta: {
-        title: '时间线',
+        title: '时间洞察',
         requiresAuth: true
       }
     },

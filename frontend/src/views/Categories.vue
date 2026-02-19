@@ -45,12 +45,13 @@ const categoryDetailColumns: DetailColumn[] = [
     title: '主分类',
     dataIndex: 'trans_type_name',
     key: 'trans_type_name',
-    width: 120,
+    width: 140,
   },
   {
     title: '子分类',
     dataIndex: 'trans_sub_type_name',
     key: 'trans_sub_type_name',
+    width: 160,
   },
   {
     title: '交易笔数',
@@ -58,7 +59,7 @@ const categoryDetailColumns: DetailColumn[] = [
     key: 'count',
     valueType: 'number',
     align: 'center',
-    width: 100,
+    width: 130,
   },
   {
     title: '总金额（元）',
@@ -67,7 +68,7 @@ const categoryDetailColumns: DetailColumn[] = [
     valueType: 'currency',
     tone: 'danger',
     align: 'right',
-    width: 120,
+    width: 170,
   },
   {
     title: '平均金额（元）',
@@ -76,7 +77,7 @@ const categoryDetailColumns: DetailColumn[] = [
     valueType: 'currency',
     tone: 'info',
     align: 'right',
-    width: 120,
+    width: 170,
   },
 ]
 
