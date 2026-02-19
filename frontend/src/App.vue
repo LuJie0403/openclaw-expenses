@@ -90,7 +90,7 @@ const menuItems = computed(() => [
   { key: 'dashboard', label: '总览', title: '总览' },
   { key: 'stardust', label: '消费星辰', title: '消费星辰' },
   { key: 'categories', label: '分类分析', title: '分类分析' },
-  { key: 'timeline', label: '时间线', title: '时间线' },
+  { key: 'timeline', label: '时间洞察', title: '时间洞察' },
   { key: 'payment', label: '支付方式', title: '支付方式' },
 ])
 
