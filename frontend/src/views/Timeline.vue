@@ -56,7 +56,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useExpenseStore } from '@/stores/expense'
 import { Chart } from '@antv/g2'
-import { formatNumber, formatDate } from '@/utils/format'
+import { formatAmount, formatDate } from '@/utils/format'
 import dayjs from 'dayjs'
 
 const expenseStore = useExpenseStore()
@@ -67,15 +67,15 @@ let timelineChart: Chart | null = null
 
 // 计算属性
 const maxDailyExpense = computed(() => {
-  if (!expenseStore.timeline.length) return '¥0'
+  if (!expenseStore.timeline.length) return '¥0.00'
   const max = Math.max(...expenseStore.timeline.map(item => item.daily_total))
-  return `¥${formatNumber(max)}`
+  return `¥${formatAmount(max)}`
 })
 
 const avgDailyExpense = computed(() => {
-  if (!expenseStore.timeline.length) return '¥0'
+  if (!expenseStore.timeline.length) return '¥0.00'
   const avg = expenseStore.timeline.reduce((sum, item) => sum + item.daily_total, 0) / expenseStore.timeline.length
-  return `¥${formatNumber(avg)}`
+  return `¥${formatAmount(avg)}`
 })
 
 const maxTransactionDay = computed(() => {
@@ -122,13 +122,13 @@ const initTimelineChart = () => {
       labelFormatter: (value: string) => dayjs(value).format('MM-DD')
     })
     .axis('y', { 
-      title: '日支出金额 (¥)',
-      labelFormatter: (value: number) => `¥${formatNumber(value)}`
+      title: '日支出金额（元）',
+      labelFormatter: (value: number) => `¥${formatAmount(value)}`
     })
     .tooltip({
       items: [
         { name: '日期', field: 'date', valueFormatter: (value: string) => formatDate(value) },
-        { name: '支出金额', field: 'daily_total', valueFormatter: (value: number) => `¥${formatNumber(value)}` },
+        { name: '支出金额', field: 'daily_total', valueFormatter: (value: number) => `¥${formatAmount(value)}` },
         { name: '交易笔数', field: 'transaction_count' }
       ]
     })

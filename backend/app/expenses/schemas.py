@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
 # --- Original Models ---
 class ExpenseSummary(BaseModel):
@@ -40,14 +40,16 @@ class StardustNode(BaseModel):
     name: str
     symbolSize: float
     value: float
-    category: str
+    category: int
+    label: Optional[Dict[str, Any]] = None
+    itemStyle: Optional[Dict[str, Any]] = None
 
 class StardustLink(BaseModel):
     source: str
     target: str
 
 class StardustCategory(BaseModel):
-    trans_type_name: str
+    name: str
 
 class StardustData(BaseModel):
     nodes: List[StardustNode]

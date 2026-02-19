@@ -5,7 +5,7 @@
 - 走查时间：2026-02-11 19:20:40 CST
 - 走查版本：`385b6f776d49dadacae8675984cd76bff7765122`
 - 走查范围：
-  - 后端：`backend/main_v2.py`、`backend/app/**`、`backend/config.py`、`backend/init_auth_db.py`
+  - 后端：`backend/app/main.py`、`backend/app/**`、`backend/config.py`、`backend/init_auth_db.py`
   - 前端：`frontend/src/**`
   - 部署与文档：`deploy.sh`、`docs/DEPLOYMENT_GUIDE.md`、`README.md`
 - 走查方式：静态代码分析 + 本地可执行验证（语法编译、构建命令）
@@ -24,8 +24,8 @@
    - 证据：
      - `deploy.sh:32` 安装 `requirements-minimal.txt`
      - `backend/requirements-minimal.txt:1`~`backend/requirements-minimal.txt:5` 不含 `python-jose` / `passlib`
-     - `backend/main_v2.py:11`~`backend/main_v2.py:12` 直接依赖 `jose` / `passlib`
-   - 风险：部署后 `uvicorn main_v2:app` 可能因缺依赖崩溃，服务不可用。
+     - `backend/app/main.py:11`~`backend/app/main.py:12` 直接依赖 `jose` / `passlib`
+   - 风险：部署后 `uvicorn app.main:app` 可能因缺依赖崩溃，服务不可用。
 
 2. 模块化后端 `backend/app` 实现残缺，但部署文档指向该入口  
    - 证据：
@@ -45,7 +45,7 @@
    - 证据：
      - `frontend/src/services/api.ts:5`~`frontend/src/services/api.ts:7` 开发环境 baseURL = `http://localhost:8000`
      - `frontend/src/services/api.ts:93` 等请求路径为 `/expenses/*`
-     - `backend/main_v2.py:24` 后端统一前缀为 `/api`
+     - `backend/app/main.py:24` 后端统一前缀为 `/api`
    - 风险：本地开发请求落到 `/expenses/*`，与后端 `/api/expenses/*` 不匹配，接口 404。
 
 2. Dashboard 代码存在运行时错误风险
@@ -58,13 +58,13 @@
    - 证据：
      - 前端有 `frontend/src/services/api.ts:123` 请求 `/health`
      - 后端未实现 `/health`（仓库检索无对应路由）
-     - `deploy.sh:85` 输出 `/api/v1/health`，与实际 `main_v2` 路径体系不一致
+     - `deploy.sh:85` 输出 `/api/v1/health`，与实际 `app.main` 路径体系不一致
    - 风险：监控探针与联调脚本失效，运维排障成本上升。
 
 4. 安全基线偏弱
    - 证据：
      - `backend/config.py:17` 存在弱默认 `SECRET_KEY`
-     - `backend/main_v2.py:28` 使用 `allow_origins=["*"]`
+     - `backend/app/main.py:28` 使用 `allow_origins=["*"]`
      - `frontend/src/stores/auth.ts:13`、`frontend/src/stores/auth.ts:25` 使用 `localStorage` 持久化 token
    - 风险：密钥配置不当和 XSS 场景下 token 盗取风险增加。
 
@@ -83,17 +83,17 @@
 
 3. 代码基线漂移明显（多入口并行）
    - 证据：
-     - `backend/start.sh:5` 使用 `main_v2:app`
+     - `backend/start.sh:5` 使用 `app.main:app`
      - `docs/DEPLOYMENT_GUIDE.md:102` 使用 `app.main:app`
    - 风险：团队协作时“看似可用、实际行为不一致”问题频发。
 
 ## 亮点
-1. 业务域拆分清晰：摘要、月度、分类、支付方式、时间线等接口边界明确（`backend/main_v2.py`）。
+1. 业务域拆分清晰：摘要、月度、分类、支付方式、时间线等接口边界明确（`backend/app/main.py`）。
 2. 前端状态集中管理：`Pinia` store 统一维护统计数据，组件消费简单（`frontend/src/stores/expense.ts`）。
 3. 可视化维度丰富：总览 + 分类 + 时间线 + 支付方式 + 星辰图，产品表达力较强。
 
 ## 整改建议（落地优先级）
-1. 统一后端唯一入口（建议只保留 `main_v2` 或完成 `app/` 重构），并同步修正部署文档与脚本。
+1. 统一后端唯一入口（仅保留 `app.main`），并同步修正部署文档与脚本。
 2. 立即清理仓库中的明文凭据与硬编码密码，轮换数据库口令与 JWT 密钥。
 3. 统一 API 前缀策略（开发/生产一致），补齐健康检查路由并更新脚本输出。
 4. 修复 Dashboard `dayjs` 依赖问题并补齐图表销毁逻辑。

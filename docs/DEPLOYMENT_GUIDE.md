@@ -41,7 +41,7 @@
 1.  **停止旧服务**: 找到并停止所有相关的 uvicorn 进程。
     ```bash
     # 通过 pkill 模糊查找并停止
-    ssh openclaw-expenses@120.27.250.73 "pkill -f 'uvicorn main_v2:app'"
+    ssh openclaw-expenses@120.27.250.73 "pkill -f 'uvicorn app.main:app'"
     
     # 如果 pkill 失败，手动查找并 kill
     ssh openclaw-expenses@120.27.250.73 "ps aux | grep uvicorn"
@@ -100,7 +100,7 @@
     ssh openclaw-expenses@120.27.250.73 "
     cd ~/apps/openclaw-expenses/backend
     source venv/bin/activate
-    nohup uvicorn main_v2:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
+    nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
     "
     ```
 
@@ -146,7 +146,7 @@
     -   **解决方案**: 在安装依赖前，强制升级 `pip`：`pip install --upgrade pip`。
 
 2.  **问题**: 后端启动后迅速失败，日志提示 `ModuleNotFoundError: No module named 'jose'` 或 `No module named 'passlib'`。
-    -   **原因**: 运行入口 `main_v2.py` 依赖 JWT 和密码哈希组件，但安装了不含认证依赖的 requirements 文件。
+    -   **原因**: 运行入口 `app/main.py` 依赖 JWT 和密码哈希组件，但安装了不含认证依赖的 requirements 文件。
     -   **解决方案**: 使用 `pip install -r requirements-jwt.txt`，确保安装 `python-jose[cryptography]` 与 `passlib[bcrypt]`。
 
 3.  **问题**: 创建虚拟环境时，使用的是 Python 3.6 而非预期的 3.9。
