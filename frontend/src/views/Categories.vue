@@ -121,7 +121,7 @@ const initChart = () => {
         { name: '笔数', field: 'count' }
       ]
     })
-    .legend({ position: 'top' })
+    .legend({ position: 'bottom' })
     .animate({ enter: { type: 'scaleInY' } })
 
   categoryChart.render()

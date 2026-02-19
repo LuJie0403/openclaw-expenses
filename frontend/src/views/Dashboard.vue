@@ -279,16 +279,16 @@ const initCategoryChart = () => {
       },
       legend: {
         type: 'scroll',
-        orient: 'vertical',
-        right: 0,
-        top: 'middle',
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 8,
         textStyle: { color: '#ddd' },
       },
       graphic: [
         {
           type: 'text',
-          left: '32%',
-          top: '47%',
+          left: 'center',
+          top: '38%',
           style: {
             text: `总额\n¥${formatAmount(totalAmount)}`,
             textAlign: 'center',
@@ -301,8 +301,8 @@ const initCategoryChart = () => {
       series: [
         {
           type: 'pie',
-          radius: ['38%', '72%'],
-          center: ['34%', '50%'],
+          radius: ['36%', '68%'],
+          center: ['50%', '42%'],
           minAngle: 2,
           avoidLabelOverlap: true,
           stillShowZeroSum: false,
