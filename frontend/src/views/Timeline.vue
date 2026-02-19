@@ -294,9 +294,10 @@ const renderDailyPulseChart = () => {
     legend: {
       data: ['日支出', '7日均线'],
       textStyle: { color: '#d9d9d9' },
-      top: 4,
+      left: 'center',
+      bottom: 8,
     },
-    grid: { left: 56, right: 20, top: 50, bottom: 40 },
+    grid: { left: 56, right: 20, top: 24, bottom: 78 },
     xAxis: {
       type: 'category',
       data: labels,
@@ -462,9 +463,10 @@ const renderYearTrendChart = () => {
     legend: {
       data: years,
       textStyle: { color: '#d9d9d9' },
-      top: 4,
+      left: 'center',
+      bottom: 8,
     },
-    grid: { left: 56, right: 24, top: 50, bottom: 40 },
+    grid: { left: 56, right: 24, top: 24, bottom: 78 },
     xAxis: {
       type: 'category',
       data: monthLabels,
@@ -515,9 +517,10 @@ const renderMonthlyChart = () => {
     legend: {
       data: ['月消费', '交易笔数'],
       textStyle: { color: '#d9d9d9' },
-      top: 4,
+      left: 'center',
+      bottom: 8,
     },
-    grid: { left: 52, right: 54, top: 50, bottom: 40 },
+    grid: { left: 52, right: 54, top: 24, bottom: 82 },
     xAxis: {
       type: 'category',
       data: labels,
