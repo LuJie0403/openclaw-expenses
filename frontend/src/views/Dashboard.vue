@@ -6,7 +6,7 @@
         <div class="stat-card primary">
           <div class="stat-icon">💰</div>
           <div class="stat-content">
-            <div class="stat-number">¥{{ formatNumber(totalExpenses) }}</div>
+            <div class="stat-number">¥{{ formatAmount(totalExpenses) }}</div>
             <div class="stat-label">总支出</div>
           </div>
         </div>
@@ -15,7 +15,7 @@
         <div class="stat-card success">
           <div class="stat-icon">📊</div>
           <div class="stat-content">
-            <div class="stat-number">{{ formatNumber(totalTransactions) }}</div>
+            <div class="stat-number">{{ formatNumber(totalTransactions, 0) }}</div>
             <div class="stat-label">交易笔数</div>
           </div>
         </div>
@@ -24,7 +24,7 @@
         <div class="stat-card warning">
           <div class="stat-icon">📅</div>
           <div class="stat-content">
-            <div class="stat-number">¥{{ formatNumber(avgExpense) }}</div>
+            <div class="stat-number">¥{{ formatAmount(avgExpense) }}</div>
             <div class="stat-label">平均消费</div>
           </div>
         </div>
@@ -33,8 +33,10 @@
         <div class="stat-card info">
           <div class="stat-icon">⏰</div>
           <div class="stat-content">
-            <div class="stat-number">{{ dateRange }}</div>
+            <div class="stat-number stat-range">{{ dateRange }}</div>
             <div class="stat-label">数据跨度</div>
+            <div class="stat-meta">最早：{{ earliestDateText }}</div>
+            <div class="stat-meta">最晚：{{ latestDateText }}</div>
           </div>
         </div>
       </a-col>
@@ -58,6 +60,7 @@
             <a-radio-group v-model:value="chartTimeRange" size="small">
               <a-radio-button value="12">近12月</a-radio-button>
               <a-radio-button value="24">近24月</a-radio-button>
+              <a-radio-button value="36">近36月</a-radio-button>
             </a-radio-group>
           </div>
           <div ref="monthlyChartRef" class="chart-container"></div>
@@ -114,7 +117,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpenseStore } from '@/stores/expense'
 import { Chart } from '@antv/g2'
-import { formatNumber } from '@/utils/format'
+import { formatAmount, formatNumber } from '@/utils/format'
+import * as echarts from 'echarts'
 import dayjs from 'dayjs'
 import weekOfYear from 'dayjs/plugin/weekOfYear'
 
@@ -132,6 +136,14 @@ const chartType = ref('pie')
 const totalExpenses = computed(() => expenseStore.totalExpenses)
 const totalTransactions = computed(() => expenseStore.totalTransactions)
 const avgExpense = computed(() => expenseStore.avgExpense)
+const earliestDateText = computed(() => {
+  const date = expenseStore.summary?.earliest_date
+  return date ? dayjs(date).format('YYYY-MM-DD') : '--'
+})
+const latestDateText = computed(() => {
+  const date = expenseStore.summary?.latest_date
+  return date ? dayjs(date).format('YYYY-MM-DD') : '--'
+})
 const dateRange = computed(() => {
   if (
     !expenseStore.summary ||
@@ -142,7 +154,7 @@ const dateRange = computed(() => {
   }
   const start = new Date(expenseStore.summary.earliest_date)
   const end = new Date(expenseStore.summary.latest_date)
-  const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+  const days = Math.max(Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)), 0)
   return `${Math.floor(days / 365)}年${Math.floor((days % 365) / 30)}月`
 })
 
@@ -154,7 +166,7 @@ const heatmapChartRef = ref<HTMLElement>()
 
 // 图表实例
 let monthlyChart: Chart | null = null
-let categoryChart: Chart | null = null
+let categoryChart: echarts.ECharts | null = null
 let paymentChart: Chart | null = null
 let heatmapChart: Chart | null = null
 
@@ -181,13 +193,13 @@ const initMonthlyChart = () => {
     .scale('y', { nice: true })
     .axis('x', { title: '月份' })
     .axis('y', { 
-      title: '支出金额 (¥)',
-      labelFormatter: (value: number) => `¥${(value / 1000).toFixed(0)}K`
+      title: '支出金额（元）',
+      labelFormatter: (value: number) => `¥${formatAmount(value)}`
     })
     .tooltip({
       items: [
         { name: '月份', channel: 'x' },
-        { name: '支出金额', channel: 'y', valueFormatter: (value: number) => `¥${formatNumber(value)}` },
+        { name: '支出金额', channel: 'y', valueFormatter: (value: number) => `¥${formatAmount(value)}` },
         { name: '交易笔数', field: 'transaction_count' }
       ]
     })
@@ -196,70 +208,173 @@ const initMonthlyChart = () => {
   monthlyChart.render()
 }
 
-// 初始化分类占比图
-const initCategoryChart = () => {
-  if (!categoryChartRef.value || !expenseStore.topCategories.length) return
+interface CategoryNode {
+  name: string
+  value: number
+  children: Array<{ name: string; value: number }>
+}
 
-  const data = expenseStore.topCategories.slice(0, 10)
+const buildCategoryNodes = (): CategoryNode[] => {
+  const grouped = new Map<string, CategoryNode>()
 
-  if (chartType.value === 'pie') {
-    categoryChart = new Chart({
-      container: categoryChartRef.value,
-      autoFit: true,
-      height: 350,
-    })
-    
-    categoryChart.theme({ type: 'classicDark' }); // Enable Dark Theme
+  expenseStore.categories.forEach((item) => {
+    const mainName = item.trans_type_name || '未分类'
+    const subName = item.trans_sub_type_name || '其他'
+    const amount = Number(item.total_amount || 0)
 
-    categoryChart
-      .interval()
-      .data(data)
-      .coordinate({ type: 'theta' })
-      .encode('y', 'total_amount')
-      .encode('color', 'trans_sub_type_name')
-      .scale('color', { 
-        palette: ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7']
-      })
-      .label({ 
-        text: 'trans_sub_type_name',
-        fontSize: 12,
-        fontWeight: 'bold',
-        fill: '#fff'
-      })
-      .tooltip({
-        items: [
-          { name: '类别', channel: 'color' },
-          { name: '金额', channel: 'y', valueFormatter: (value: number) => `¥${formatNumber(value)}` },
-          { name: '笔数', field: 'count' }
-        ]
-      })
-      .legend({ position: 'right' })
-  } else {
-    categoryChart = new Chart({
-      container: categoryChartRef.value,
-      autoFit: true,
-      height: 350,
-    })
-    
-    categoryChart.theme({ type: 'classicDark' }); // Enable Dark Theme
+    if (!grouped.has(mainName)) {
+      grouped.set(mainName, { name: mainName, value: 0, children: [] })
+    }
 
-    categoryChart
-      .treemap()
-      .data({
-        type: 'hierarchical',
-        value: data,
-      })
-      .encode('value', 'total_amount')
-      .encode('color', 'trans_type_name')
-      .tooltip({
-        items: [
-          { name: '类别', field: 'trans_sub_type_name' },
-          { name: '金额', field: 'total_amount', valueFormatter: (value: number) => `¥${formatNumber(value)}` }
-        ]
-      })
+    const node = grouped.get(mainName)!
+    node.value += amount
+    node.children.push({ name: subName, value: amount })
+  })
+
+  return Array.from(grouped.values())
+    .map((node) => ({
+      ...node,
+      children: node.children.sort((a, b) => b.value - a.value),
+    }))
+    .sort((a, b) => b.value - a.value)
+}
+
+const buildPieData = (nodes: CategoryNode[]) => {
+  const TOP_LIMIT = 6
+  if (nodes.length <= TOP_LIMIT) {
+    return nodes.map((node) => ({ name: node.name, value: node.value }))
   }
 
-  categoryChart.render()
+  const head = nodes.slice(0, TOP_LIMIT).map((node) => ({ name: node.name, value: node.value }))
+  const tail = nodes.slice(TOP_LIMIT)
+  const othersAmount = tail.reduce((sum, node) => sum + node.value, 0)
+  if (othersAmount > 0) {
+    head.push({ name: '其他', value: othersAmount })
+  }
+  return head
+}
+
+// 初始化分类占比图（ECharts）
+const initCategoryChart = () => {
+  if (!categoryChartRef.value || !expenseStore.categories.length) return
+
+  const categoryNodes = buildCategoryNodes()
+  const pieData = buildPieData(categoryNodes)
+  const totalAmount = categoryNodes.reduce((sum, node) => sum + node.value, 0)
+
+  if (categoryChart) {
+    categoryChart.dispose()
+    categoryChart = null
+  }
+
+  categoryChart = echarts.init(categoryChartRef.value)
+
+  if (chartType.value === 'pie') {
+    categoryChart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) =>
+          `${params.name}<br/>金额: ¥${formatAmount(params.value)}<br/>占比: ${Number(params.percent).toFixed(1)}%`,
+      },
+      legend: {
+        type: 'scroll',
+        orient: 'vertical',
+        right: 0,
+        top: 'middle',
+        textStyle: { color: '#ddd' },
+      },
+      graphic: [
+        {
+          type: 'text',
+          left: '32%',
+          top: '47%',
+          style: {
+            text: `总额\n¥${formatAmount(totalAmount)}`,
+            textAlign: 'center',
+            fill: '#fff',
+            fontSize: 14,
+            fontWeight: 600,
+          },
+        },
+      ],
+      series: [
+        {
+          type: 'pie',
+          radius: ['38%', '72%'],
+          center: ['34%', '50%'],
+          minAngle: 2,
+          avoidLabelOverlap: true,
+          stillShowZeroSum: false,
+          itemStyle: {
+            borderColor: '#1f1f1f',
+            borderWidth: 1,
+          },
+          label: {
+            color: '#e8e8e8',
+            formatter: (params: any) => {
+              const percent = Number(params.percent || 0)
+              return percent < 4 ? '' : `${params.name}\n${percent.toFixed(1)}%`
+            },
+          },
+          labelLine: {
+            show: true,
+            length: 10,
+            length2: 8,
+          },
+          labelLayout: { hideOverlap: true },
+          data: pieData,
+        },
+      ],
+    })
+    return
+  }
+
+  categoryChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: (params: any) => {
+        const value = Number(params.value || 0)
+        const path = (params.treePathInfo || []).map((item: any) => item.name).filter(Boolean).join(' / ')
+        return `${path}<br/>金额: ¥${formatAmount(value)}`
+      },
+    },
+    series: [
+      {
+        type: 'treemap',
+        data: categoryNodes,
+        roam: false,
+        nodeClick: false,
+        breadcrumb: { show: false },
+        leafDepth: 1,
+        visibleMin: 300,
+        upperLabel: {
+          show: true,
+          color: '#fff',
+          height: 24,
+        },
+        label: {
+          show: true,
+          formatter: (params: any) => {
+            const value = Number(params.value || 0)
+            return `${params.name}\n¥${formatAmount(value)}`
+          },
+          color: '#fff',
+          fontSize: 12,
+        },
+        itemStyle: {
+          borderColor: '#1f1f1f',
+          borderWidth: 1,
+          gapWidth: 1,
+        },
+        levels: [
+          { itemStyle: { borderColor: '#111', gapWidth: 2 } },
+          { colorSaturation: [0.25, 0.55], itemStyle: { gapWidth: 1 } },
+          { colorSaturation: [0.35, 0.75], itemStyle: { gapWidth: 1 } },
+        ],
+      },
+    ],
+  })
 }
 
 // 初始化支付方式分析图
@@ -291,7 +406,7 @@ const initPaymentChart = () => {
       items: [
         { name: '支付账户', channel: 'x' },
         { name: '使用次数', channel: 'y' },
-        { name: '总消费', field: 'total_spent', valueFormatter: (value: number) => `¥${formatNumber(value)}` }
+        { name: '总消费', field: 'total_spent', valueFormatter: (value: number) => `¥${formatAmount(value)}` }
       ]
     })
     .animate({ enter: { type: 'scaleInY' } })
@@ -336,7 +451,7 @@ const initHeatmapChart = () => {
     .tooltip({
       items: [
         { name: '日期', field: 'day' },
-        { name: '日支出', field: 'value', valueFormatter: (value) => `¥${formatNumber(value)}` },
+        { name: '日支出', field: 'value', valueFormatter: (value: number) => `¥${formatAmount(value)}` },
       ]
     });
 
@@ -366,7 +481,8 @@ watch(chartTimeRange, () => {
 
 watch(chartType, () => {
   if (categoryChart) {
-    categoryChart.destroy()
+    categoryChart.dispose()
+    categoryChart = null
     initCategoryChart()
   }
 })
@@ -377,7 +493,7 @@ onUnmounted(() => {
     monthlyChart = null
   }
   if (categoryChart) {
-    categoryChart.destroy()
+    categoryChart.dispose()
     categoryChart = null
   }
   if (paymentChart) {
@@ -459,9 +575,19 @@ onUnmounted(() => {
   text-shadow: 0 0 10px rgba(255,255,255,0.2);
 }
 
+.stat-range {
+  font-size: 20px;
+}
+
 .stat-label {
   font-size: 14px;
   color: #aaa; /* Changed from #8c8c8c */
+}
+
+.stat-meta {
+  font-size: 12px;
+  color: #8f9bb3;
+  line-height: 1.5;
 }
 
 .chart-section {

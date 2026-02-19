@@ -1,95 +1,154 @@
 #!/bin/bash
-# 一键部署脚本
+# One-command deploy script (backend + frontend build)
 
-set -e
+set -Eeuo pipefail
 
-echo "🚀 开始部署 OpenClaw Expenses..."
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$ROOT_DIR/backend"
+FRONTEND_DIR="$ROOT_DIR/frontend"
 
-# 检查环境
-echo "📋 检查环境..."
-command -v python3 >/dev/null 2>&1 || { echo "❌ Python3 未安装"; exit 1; }
-command -v node >/dev/null 2>&1 || { echo "❌ Node.js 未安装"; exit 1; }
-command -v npm >/dev/null 2>&1 || { echo "❌ npm 未安装"; exit 1; }
+APP_ENV="${APP_ENV:-development}"
+BACKEND_VENV_DIR="${BACKEND_VENV_DIR:-venv}"
+BACKEND_REQUIREMENTS="${BACKEND_REQUIREMENTS:-requirements-jwt.txt}"
+BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_REGISTRY="${FRONTEND_REGISTRY:-https://registry.npmmirror.com}"
+PNPM_VERSION="${PNPM_VERSION:-10.28.2}"
+RELOAD_NGINX="${RELOAD_NGINX:-false}"
+HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/health}"
+DIST_LINK_PATH="${DIST_LINK_PATH:-$ROOT_DIR/dist/frontend}"
 
-# 后端部署
-echo "🔧 部署后端服务..."
-cd backend
-
-if [ ! -d "venv" ]; then
-    echo "📦 创建Python虚拟环境..."
-    python3 -m venv venv
-fi
-
-source venv/bin/activate
-
-if [ ! -f ".env.development" ]; then
-    echo "⚙️  创建配置文件..."
-    cp .env.example .env.development
-    echo "📝 请编辑 .env.development 文件，填入数据库配置"
-fi
-
-echo "📥 安装Python依赖..."
-pip install -r requirements-jwt.txt
-
-echo "🚀 启动后端服务..."
-nohup uvicorn main_v2:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
-BACKEND_PID=$!
-echo "✅ 后端服务已启动，PID: $BACKEND_PID"
-
-cd ..
-
-# 前端部署
-echo "🎨 部署前端应用..."
-cd frontend
-
-echo "📥 安装Node.js依赖..."
-npm install
-
-echo "🔨 构建前端应用..."
-npm run build
-
-echo "📁 创建dist目录链接..."
-mkdir -p ../dist
-ln -sf $(pwd)/dist ../dist/frontend
-
-cd ..
-
-# Nginx配置 (可选)
-if command -v nginx >/dev/null 2>&1; then
-    echo "🌐 配置Nginx..."
-    cat > nginx.conf << EOF
-server {
-    listen 80;
-    server_name localhost;
-    
-    location / {
-        root /home/lujie/app/openclaw-expenses/dist/frontend;
-        try_files \$uri \$uri/ /index.html;
-    }
-    
-    location /api {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    }
+log() {
+  echo "[deploy] $*"
 }
-EOF
-    echo "📝 Nginx配置已生成，请手动配置到nginx.conf"
+
+die() {
+  echo "[deploy][error] $*" >&2
+  exit 1
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "Missing command: $1"
+}
+
+resolve_pnpm_cmd() {
+  if command -v pnpm >/dev/null 2>&1; then
+    PNPM_CMD=(pnpm)
+    return
+  fi
+
+  require_cmd corepack
+  corepack enable >/dev/null 2>&1 || true
+  corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null 2>&1 || true
+
+  if command -v pnpm >/dev/null 2>&1; then
+    PNPM_CMD=(pnpm)
+    return
+  fi
+
+  # Fallback for environments where shim is not on PATH
+  PNPM_CMD=(corepack pnpm)
+}
+
+wait_for_health() {
+  local retries="${1:-20}"
+  local sleep_seconds="${2:-1}"
+  local i
+  for i in $(seq 1 "$retries"); do
+    if curl -fsS "$HEALTH_CHECK_URL" >/dev/null 2>&1; then
+      log "Backend health check passed: $HEALTH_CHECK_URL"
+      return 0
+    fi
+    sleep "$sleep_seconds"
+  done
+  return 1
+}
+
+log "Starting deployment from: $ROOT_DIR"
+require_cmd python3
+require_cmd node
+require_cmd curl
+
+if [ ! -d "$BACKEND_DIR" ] || [ ! -d "$FRONTEND_DIR" ]; then
+  die "Project structure not found under $ROOT_DIR"
 fi
 
-echo ""
-echo "✅ 部署完成！"
-echo ""
-echo "📊 应用信息："
-echo "   • 后端API: http://localhost:8000/api/health"
-echo "   • 前端应用: http://localhost:3000"
-echo "   • API文档: http://localhost:8000/docs"
-echo ""
-echo "📝 下一步操作："
-echo "   1. 配置数据库连接 (.env.development)"
-echo "   2. 配置Nginx (可选)"
-echo "   3. 配置SSL证书 (生产环境)"
-echo "   4. 推送到GitHub仓库"
-echo ""
-echo "🎯 项目已准备就绪！"
+resolve_pnpm_cmd
+log "Using pnpm command: ${PNPM_CMD[*]}"
+"${PNPM_CMD[@]}" -v
+
+log "Deploying backend..."
+cd "$BACKEND_DIR"
+
+if [ ! -d "$BACKEND_VENV_DIR" ]; then
+  log "Creating backend virtualenv: $BACKEND_VENV_DIR"
+  python3 -m venv "$BACKEND_VENV_DIR"
+fi
+
+BACKEND_PYTHON="$BACKEND_DIR/$BACKEND_VENV_DIR/bin/python"
+BACKEND_UVICORN="$BACKEND_DIR/$BACKEND_VENV_DIR/bin/uvicorn"
+
+[ -x "$BACKEND_PYTHON" ] || die "Virtualenv python not found: $BACKEND_PYTHON"
+[ -f "$BACKEND_REQUIREMENTS" ] || die "Requirements file not found: $BACKEND_REQUIREMENTS"
+
+if [ ! -f ".env.${APP_ENV}" ]; then
+  if [ -f ".env.${APP_ENV}.example" ]; then
+    log "Creating backend env file: .env.${APP_ENV} (from example)"
+    cp ".env.${APP_ENV}.example" ".env.${APP_ENV}"
+  elif [ -f ".env.example" ]; then
+    log "Creating backend env file: .env.${APP_ENV} (from .env.example)"
+    cp ".env.example" ".env.${APP_ENV}"
+  else
+    die "Missing env template (.env.${APP_ENV}.example or .env.example)"
+  fi
+fi
+
+log "Installing backend dependencies..."
+"$BACKEND_PYTHON" -m pip install --upgrade pip setuptools wheel
+"$BACKEND_PYTHON" -m pip install -r "$BACKEND_REQUIREMENTS"
+[ -x "$BACKEND_UVICORN" ] || die "Virtualenv uvicorn not found after dependency install"
+
+log "Stopping old backend process (if exists)..."
+pkill -f "$BACKEND_UVICORN app.main:app" >/dev/null 2>&1 || true
+pkill -f "uvicorn app.main:app --host $BACKEND_HOST --port $BACKEND_PORT" >/dev/null 2>&1 || true
+
+log "Starting backend: app.main:app (${BACKEND_HOST}:${BACKEND_PORT})"
+nohup "$BACKEND_UVICORN" app.main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" > backend.log 2>&1 &
+BACKEND_PID=$!
+log "Backend started with PID: $BACKEND_PID"
+
+if ! wait_for_health 20 1; then
+  tail -n 80 backend.log || true
+  die "Backend health check failed: $HEALTH_CHECK_URL"
+fi
+
+log "Deploying frontend with pnpm..."
+cd "$FRONTEND_DIR"
+"${PNPM_CMD[@]}" install --registry "$FRONTEND_REGISTRY"
+
+if ! "${PNPM_CMD[@]}" build; then
+  log "pnpm build failed, fallback to: pnpm exec vite build"
+  "${PNPM_CMD[@]}" exec vite build
+fi
+
+mkdir -p "$(dirname "$DIST_LINK_PATH")"
+ln -sfn "$FRONTEND_DIR/dist" "$DIST_LINK_PATH"
+log "Frontend dist symlink updated: $DIST_LINK_PATH -> $FRONTEND_DIR/dist"
+
+if [ "$RELOAD_NGINX" = "true" ]; then
+  if command -v systemctl >/dev/null 2>&1; then
+    if sudo systemctl reload nginx; then
+      log "Nginx reloaded."
+    else
+      die "Failed to reload nginx via systemctl."
+    fi
+  else
+    die "RELOAD_NGINX=true but systemctl not found."
+  fi
+fi
+
+log "Deployment completed successfully."
+echo
+echo "Backend health: $HEALTH_CHECK_URL"
+echo "Backend docs:   http://${BACKEND_HOST}:${BACKEND_PORT}/docs"
+echo "Frontend dist:  $FRONTEND_DIR/dist"

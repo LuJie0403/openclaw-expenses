@@ -1,20 +1,18 @@
 // 格式化工具函数
 export function formatNumber(num: number, decimals: number = 0): string {
-  if (num >= 100000000) {
-    return (num / 100000000).toFixed(decimals) + '亿'
-  } else if (num >= 10000) {
-    return (num / 10000).toFixed(decimals) + '万'
-  } else if (num >= 1000) {
-    return (num / 1000).toFixed(decimals) + 'K'
-  }
-  return num.toLocaleString('zh-CN', { maximumFractionDigits: decimals })
+  const safeNum = Number.isFinite(num) ? num : 0
+  return safeNum.toLocaleString('zh-CN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
+export function formatAmount(num: number): string {
+  return formatNumber(num, 2)
 }
 
 export function formatCurrency(num: number): string {
-  return '¥' + num.toLocaleString('zh-CN', { 
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2 
-  })
+  return '¥' + formatAmount(num)
 }
 
 export function formatDate(dateStr: string): string {

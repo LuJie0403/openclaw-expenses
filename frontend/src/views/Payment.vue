@@ -20,10 +20,10 @@
             <div v-for="method in displayedMethods" :key="method.pay_account" class="stat-item">
               <div class="stat-header">
                 <span class="account-name">{{ formatAccountName(method.pay_account) }}</span>
-                <span class="total-amount">¥{{ formatNumber(method.total_spent) }}</span>
+                <span class="total-amount">¥{{ formatAmount(method.total_spent) }}</span>
               </div>
               <div class="stat-detail">
-                <span class="usage-count">{{ method.usage_count }}笔 / 平均¥{{ formatNumber(method.avg_per_transaction) }}</span>
+                <span class="usage-count">{{ method.usage_count }}笔 / 平均¥{{ formatAmount(method.avg_per_transaction) }}</span>
               </div>
               <a-progress 
                 :percent="getUsagePercentage(method.usage_count)" 
@@ -40,39 +40,12 @@
     <a-row :gutter="24" class="table-section">
       <a-col :span="24">
         <a-card title="支付方式详情" class="table-card">
-          <a-table
-            :columns="columns"
+          <DetailDataTable
+            :columns="paymentDetailColumns"
             :data-source="expenseStore.paymentMethods"
-            :pagination="{ 
-              pageSize: 10, 
-              showSizeChanger: true, 
-              pageSizeOptions: ['10', '20', '50', '100'],
-              showQuickJumper: true, 
-              total: expenseStore.paymentMethods.length,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`
-            }"
-            row-key="pay_account"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'total_spent'">
-                <span class="amount-text">¥{{ formatNumber(record.total_spent) }}</span>
-              </template>
-              <template v-if="column.key === 'avg_per_transaction'">
-                <span class="avg-text">¥{{ formatNumber(record.avg_per_transaction) }}</span>
-              </template>
-              <template v-if="column.key === 'usage_percentage'">
-                <div class="percentage-cell">
-                  <span class="percentage-text">{{ getUsagePercentage(record.usage_count) }}%</span>
-                  <a-progress 
-                    :percent="getUsagePercentage(record.usage_count)" 
-                    :show-info="false"
-                    size="small"
-                    stroke-color="#667eea"
-                  />
-                </div>
-              </template>
-            </template>
-          </a-table>
+            :row-key="'pay_account'"
+            :ratio="{ title: '使用占比', valueKey: 'usage_count', color: '#667eea' }"
+          />
         </a-card>
       </a-col>
     </a-row>
@@ -83,7 +56,18 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useExpenseStore } from '@/stores/expense'
 import { Chart } from '@antv/g2'
-import { formatNumber } from '@/utils/format'
+import { formatAmount } from '@/utils/format'
+import DetailDataTable from '@/components/DetailDataTable.vue'
+
+type DetailColumn = {
+  title: string
+  key: string
+  dataIndex: string
+  width?: number
+  align?: 'left' | 'center' | 'right'
+  valueType?: 'text' | 'number' | 'currency'
+  tone?: 'default' | 'danger' | 'info'
+}
 
 const expenseStore = useExpenseStore()
 const paymentChartRef = ref<HTMLElement>()
@@ -103,19 +87,39 @@ const totalUsageCount = computed(() =>
   expenseStore.paymentMethods.reduce((sum, method) => sum + method.usage_count, 0)
 )
 
-const columns = [
+const paymentDetailColumns: DetailColumn[] = [
   {
-    title: '#',
-    key: 'rowIndex',
-    width: 60,
-    align: 'center',
-    customRender: ({ index }) => `${index + 1}`,
+    title: '支付账户',
+    dataIndex: 'pay_account',
+    key: 'pay_account',
+    width: 200,
   },
-  { title: '支付账户', dataIndex: 'pay_account', key: 'pay_account', width: 200 },
-  { title: '使用次数', dataIndex: 'usage_count', key: 'usage_count', align: 'center', width: 100 },
-  { title: '总消费', dataIndex: 'total_spent', key: 'total_spent', align: 'right', width: 120 },
-  { title: '平均消费', dataIndex: 'avg_per_transaction', key: 'avg_per_transaction', align: 'right', width: 120 },
-  { title: '使用占比', key: 'usage_percentage', align: 'center', width: 150 },
+  {
+    title: '使用次数',
+    dataIndex: 'usage_count',
+    key: 'usage_count',
+    valueType: 'number',
+    align: 'center',
+    width: 100,
+  },
+  {
+    title: '总消费（元）',
+    dataIndex: 'total_spent',
+    key: 'total_spent',
+    valueType: 'currency',
+    tone: 'danger',
+    align: 'right',
+    width: 120,
+  },
+  {
+    title: '平均消费（元）',
+    dataIndex: 'avg_per_transaction',
+    key: 'avg_per_transaction',
+    valueType: 'currency',
+    tone: 'info',
+    align: 'right',
+    width: 120,
+  },
 ]
 
 const formatAccountName = (account: string): string => {
@@ -149,11 +153,11 @@ const initChart = () => {
     .encode('color', '#667eea')
     .scale('y', { nice: true })
     .axis('x', { title: '支付账户', label: { autoRotate: true, autoHide: true } })
-    .axis('y', { title: '消费金额 (¥)', labelFormatter: (value: number) => `¥${(value / 1000).toFixed(0)}K` })
+    .axis('y', { title: '消费金额（元）', labelFormatter: (value: number) => `¥${formatAmount(value)}` })
     .tooltip({
       items: [
         { name: '支付账户', field: 'pay_account' },
-        { name: '总消费', field: 'total_spent', valueFormatter: (value: number) => `¥${formatNumber(value)}` },
+        { name: '总消费', field: 'total_spent', valueFormatter: (value: number) => `¥${formatAmount(value)}` },
         { name: '使用次数', field: 'usage_count' }
       ]
     })
@@ -244,28 +248,6 @@ onUnmounted(() => {
 
 .table-section {
   margin-top: 24px;
-}
-
-.amount-text {
-  font-weight: 600;
-  color: #ff4d4f;
-}
-
-.avg-text {
-  color: #40a9ff;
-}
-
-.percentage-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.percentage-text {
-  font-size: 12px;
-  font-weight: 500;
-  color: #667eea;
 }
 
 @media (max-width: 768px) {

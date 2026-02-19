@@ -22,6 +22,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import * as echarts from 'echarts';
 import api from '../services/api'; 
 import { useAuthStore } from '@/stores/auth';
+import { formatAmount } from '@/utils/format';
 
 const chartContainer = ref<HTMLElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
@@ -29,6 +30,75 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const debugInfo = ref<string>('');
 const authStore = useAuthStore();
+const onResize = () => {
+  if (chartInstance) {
+    chartInstance.resize();
+  }
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const normalizeStardustPayload = (payload: any) => {
+  const rawNodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+  const rawLinks = Array.isArray(payload?.links) ? payload.links : [];
+  const rawCategories = Array.isArray(payload?.categories) ? payload.categories : [];
+
+  const normalizedNodes = rawNodes.map((node: any, index: number) => {
+    const id = String(node?.id ?? node?.name ?? `node_${index}`);
+    const value = Number(node?.value ?? 0);
+    const symbolSize = clamp(Number(node?.symbolSize ?? 18), 8, 90);
+    return {
+      id,
+      name: String(node?.name ?? id),
+      value: Number.isFinite(value) ? value : 0,
+      symbolSize: Number.isFinite(symbolSize) ? symbolSize : 18,
+      category: Number.isFinite(Number(node?.category)) ? Number(node.category) : 0,
+      label: node?.label,
+      itemStyle: node?.itemStyle,
+    };
+  });
+
+  const nodeById = new Map<string, any>();
+  const nodeByName = new Map<string, any>();
+  normalizedNodes.forEach((node) => {
+    nodeById.set(node.id, node);
+    nodeByName.set(node.name, node);
+  });
+
+  const normalizedLinks = rawLinks
+    .map((link: any) => {
+      const rawSource = String(link?.source ?? '');
+      const rawTarget = String(link?.target ?? '');
+      const sourceNode = nodeById.get(rawSource) ?? nodeByName.get(rawSource);
+      const targetNode = nodeById.get(rawTarget) ?? nodeByName.get(rawTarget);
+      if (!sourceNode || !targetNode) {
+        return null;
+      }
+      return { source: sourceNode.id, target: targetNode.id };
+    })
+    .filter(Boolean) as Array<{ source: string; target: string }>;
+
+  if (!normalizedLinks.length && normalizedNodes.length > 1) {
+    const rootNode = normalizedNodes[0];
+    normalizedNodes.slice(1).forEach((node) => {
+      normalizedLinks.push({ source: rootNode.id, target: node.id });
+    });
+  }
+
+  const maxCategoryIndex = normalizedNodes.reduce((max, node) => Math.max(max, Number(node.category || 0)), 0);
+  const normalizedCategories = rawCategories.map((item: any, index: number) => ({
+    name: String(item?.name ?? `分组${index + 1}`),
+  }));
+  while (normalizedCategories.length <= maxCategoryIndex) {
+    normalizedCategories.push({ name: `分组${normalizedCategories.length + 1}` });
+  }
+
+  return {
+    nodes: normalizedNodes,
+    links: normalizedLinks,
+    categories: normalizedCategories,
+  };
+};
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
@@ -40,8 +110,13 @@ onMounted(async () => {
   let data: any = null;
   try {
     const response = await api.get('/expenses/stardust');
-    data = response.data;
-    debugInfo.value = JSON.stringify(data, null, 2).substring(0, 1000) + '...';
+    data = normalizeStardustPayload(response.data);
+    debugInfo.value = JSON.stringify({
+      nodeCount: data.nodes.length,
+      linkCount: data.links.length,
+      categoryCount: data.categories.length,
+      previewNode: data.nodes[0] ?? null,
+    }, null, 2);
 
     if (!data || !data.nodes || !data.links || !data.categories) {
         throw new Error("返回数据格式错误: 缺少 nodes/links/categories");
@@ -55,12 +130,15 @@ onMounted(async () => {
       
       const option = {
         backgroundColor: 'transparent',
-        tooltip: { formatter: (params: any) => (params.dataType === 'node' ? `${params.name}: ${params.value.toFixed(2)}` : '') },
+        tooltip: {
+          formatter: (params: any) =>
+            params.dataType === 'node' ? `${params.name}: ¥${formatAmount(Number(params.value || 0))}` : '',
+        },
         legend: [{ data: data.categories.map((c: any) => c.name), textStyle: { color: '#fff' } }],
         series: [{
             type: 'graph',
             layout: 'force',
-            nodes: data.nodes,
+            data: data.nodes,
             links: data.links,
             categories: data.categories,
             roam: true,
@@ -72,6 +150,7 @@ onMounted(async () => {
       };
       
       chartInstance.setOption(option);
+      window.addEventListener('resize', onResize);
     }
   } catch (err: any) {
     console.error("Stardust Error:", err);
@@ -82,6 +161,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('resize', onResize);
   if (chartInstance) {
     chartInstance.dispose();
   }
