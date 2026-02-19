@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import * as echarts from 'echarts';
 import api from '../services/api'; 
 import { useAuthStore } from '@/stores/auth';
@@ -29,6 +29,11 @@ let chartInstance: echarts.ECharts | null = null;
 const loading = ref(true);
 const error = ref<string | null>(null);
 const debugInfo = ref<string>('');
+const stardustData = ref<{
+  nodes: Array<Record<string, unknown>>
+  links: Array<Record<string, unknown>>
+  categories: Array<Record<string, unknown>>
+} | null>(null)
 const authStore = useAuthStore();
 const onResize = () => {
   if (chartInstance) {
@@ -100,6 +105,41 @@ const normalizeStardustPayload = (payload: any) => {
   };
 };
 
+const renderChart = () => {
+  if (!chartContainer.value || !stardustData.value) return
+
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
+
+  chartInstance = echarts.init(chartContainer.value)
+  const data = stardustData.value
+
+  const option = {
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: (params: any) =>
+        params.dataType === 'node' ? `${params.name}: ¥${formatAmount(Number(params.value || 0))}` : '',
+    },
+    legend: [{ data: data.categories.map((c: any) => c.name), textStyle: { color: '#fff' } }],
+    series: [{
+        type: 'graph',
+        layout: 'force',
+        data: data.nodes,
+        links: data.links,
+        categories: data.categories,
+        roam: true,
+        label: { position: 'right', color: '#fff', show: false },
+        force: { repulsion: 150, gravity: 0.1, edgeLength: [100, 250], layoutAnimation: false },
+        lineStyle: { color: 'source', curveness: 0.3, opacity: 0.2 },
+        emphasis: { focus: 'adjacency', label: { show: true }, lineStyle: { width: 10 } },
+    }],
+  }
+
+  chartInstance.setOption(option)
+}
+
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
     error.value = "用户未认证，无法加载数据。";
@@ -125,38 +165,18 @@ onMounted(async () => {
         throw new Error("返回数据为空 (nodes length is 0)");
     }
 
-    if (chartContainer.value) {
-      chartInstance = echarts.init(chartContainer.value);
-      
-      const option = {
-        backgroundColor: 'transparent',
-        tooltip: {
-          formatter: (params: any) =>
-            params.dataType === 'node' ? `${params.name}: ¥${formatAmount(Number(params.value || 0))}` : '',
-        },
-        legend: [{ data: data.categories.map((c: any) => c.name), textStyle: { color: '#fff' } }],
-        series: [{
-            type: 'graph',
-            layout: 'force',
-            data: data.nodes,
-            links: data.links,
-            categories: data.categories,
-            roam: true,
-            label: { position: 'right', color: '#fff', show: false },
-            force: { repulsion: 150, gravity: 0.1, edgeLength: [100, 250], layoutAnimation: false },
-            lineStyle: { color: 'source', curveness: 0.3, opacity: 0.2 },
-            emphasis: { focus: 'adjacency', label: { show: true }, lineStyle: { width: 10 } },
-        }],
-      };
-      
-      chartInstance.setOption(option);
-      window.addEventListener('resize', onResize);
-    }
+    stardustData.value = data
   } catch (err: any) {
     console.error("Stardust Error:", err);
     error.value = `渲染失败: ${err.message}`;
   } finally {
     loading.value = false;
+  }
+
+  if (!error.value && stardustData.value) {
+    await nextTick()
+    renderChart()
+    window.addEventListener('resize', onResize)
   }
 });
 
