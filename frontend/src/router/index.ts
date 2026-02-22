@@ -34,11 +34,11 @@ const router = createRouter({
       }
     },
     {
-      path: '/categories',
-      name: 'categories',
-      component: Categories,
+      path: '/stardust',
+      name: 'stardust',
+      component: Stardust,
       meta: {
-        title: '分类分析',
+        title: '消费星辰',
         requiresAuth: true
       }
     },
@@ -52,20 +52,20 @@ const router = createRouter({
       }
     },
     {
+      path: '/categories',
+      name: 'categories',
+      component: Categories,
+      meta: {
+        title: '分类分析',
+        requiresAuth: true
+      }
+    },
+    {
       path: '/payment',
       name: 'payment',
       component: Payment,
       meta: {
         title: '支付方式',
-        requiresAuth: true
-      }
-    },
-    {
-      path: '/stardust',
-      name: 'stardust',
-      component: Stardust,
-      meta: {
-        title: '消费星辰',
         requiresAuth: true
       }
     }
