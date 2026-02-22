@@ -82,7 +82,7 @@ cd "$BACKEND_DIR"
 
 if [ ! -d "$BACKEND_VENV_DIR" ]; then
   log "Creating backend virtualenv: $BACKEND_VENV_DIR"
-  python3 -m venv "$BACKEND_VENV_DIR"
+  python3.9 -m venv "$BACKEND_VENV_DIR"
 fi
 
 BACKEND_PYTHON="$BACKEND_DIR/$BACKEND_VENV_DIR/bin/python"
