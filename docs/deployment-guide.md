@@ -1,153 +1,137 @@
-# OpenClaw Expenses 部署指南（pnpm + app.main）
+# OpenClaw Expenses 部署指南（当前脚本版）
 
-本文档为当前生效版本，覆盖本地验证与阿里云部署流程。
+本文档以仓库当前脚本为准，覆盖本地验证、脚本化部署和常见故障排查。
 
-## 1. 约定与路径
+## 1. 版本基线
 
-- 本地源码目录（开发）：`/Users/iter_1024/repository_common/openclaw-expenses`
-- 本地验证目录（对齐生产相对结构）：`/Users/iter_1024/apps/openclaw-expenses`
-- 阿里云应用目录：`/home/openclaw-expenses/apps/openclaw-expenses`
-- 阿里云临时同步目录：`/home/lujie/openclaw-expenses-staging`
+- 后端入口：`app.main:app`
+- 前端构建命令：`pnpm build || pnpm exec vite build`
+- 健康检查：`/api/health`（同时保留 `/health`）
+- 部署脚本：
+  - `full-deploy.sh`：完整部署（后端 + 前端）
+  - `update-deploy.sh`：拉取并强制同步到 `origin/master` 后调用 `full-deploy.sh`
 
-## 2. 运行基线
+## 2. 先决条件
 
-- 后端入口固定为：`app.main:app`
-- 前端构建固定为：`pnpm`（不使用 npm）
-- 后端健康检查：`/api/health`
-- 前端构建兜底：`pnpm build || pnpm exec vite build`
+- Python 3.9+（`full-deploy.sh` 默认用 `python3.9 -m venv`）
+- Node.js 18+
+- pnpm 10+（脚本会尝试通过 corepack 激活）
+- MySQL 5.7+/8.0+
+- Nginx（可选，若需要 `RELOAD_NGINX=true`）
 
 ## 3. 本地验证流程
 
-### 3.1 同步到本地验证目录
+### 3.1 后端验证
 
 ```bash
-rsync -az --delete \
-  --exclude '.git' --exclude '.DS_Store' \
-  --exclude 'backend/.venv' --exclude 'frontend/node_modules' \
-  /Users/iter_1024/repository_common/openclaw-expenses/ \
-  /Users/iter_1024/apps/openclaw-expenses/
-```
-
-### 3.2 后端验证
-
-```bash
-cd /Users/iter_1024/apps/openclaw-expenses/backend
+cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools wheel
 pip install -r requirements-jwt.txt
 
 cp .env.development.example .env.development
-APP_ENV=development uvicorn app.main:app --host 127.0.0.1 --port 18000
-
-# 新开终端验证
-curl -sS http://127.0.0.1:18000/api/health
+# 按实际环境修改 DB 与 SECRET_KEY
 ```
 
-### 3.3 前端验证
+可选初始化管理员账号：
 
 ```bash
-cd /Users/iter_1024/apps/openclaw-expenses/frontend
-pnpm install --registry=https://registry.npmmirror.com
-pnpm build || pnpm exec vite build
+cd backend
+source venv/bin/activate
+APP_ENV=development python init_auth_db.py
 ```
 
-## 4. 阿里云部署流程（手工）
-
-### 4.1 本地同步到云端 staging
+启动并检查：
 
 ```bash
-rsync -az --delete \
-  --exclude '.git' --exclude '.DS_Store' \
-  --exclude 'backend/.venv' --exclude 'backend/venv' \
-  --exclude 'frontend/node_modules' \
-  /Users/iter_1024/apps/openclaw-expenses/ \
-  lujie@120.27.250.73:/home/lujie/openclaw-expenses-staging/
+cd backend
+source venv/bin/activate
+APP_ENV=development uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### 4.2 服务器部署（SSH 后执行）
-
 ```bash
-APP_DIR=/home/openclaw-expenses/apps/openclaw-expenses
-STAGING_DIR=/home/lujie/openclaw-expenses-staging
-
-# 备份
-TS=$(date +%Y%m%d-%H%M%S)
-sudo mkdir -p /home/openclaw-expenses/backups/$TS
-sudo rsync -a --exclude 'backend/venv/' --exclude 'frontend/node_modules/' \
-  "$APP_DIR/" "/home/openclaw-expenses/backups/$TS/openclaw-expenses/"
-
-# 覆盖代码
-sudo rsync -az --delete \
-  --exclude 'backend/.env' --exclude 'backend/.env.*' \
-  --exclude 'backend/venv/' --exclude 'backend/backend.log' \
-  --exclude 'frontend/node_modules/' \
-  "$STAGING_DIR/" "$APP_DIR/"
-sudo chown -R openclaw-expenses:openclaw-expenses "$APP_DIR"
-```
-
-### 4.3 后端重启
-
-```bash
-sudo pkill -f '/home/openclaw-expenses/apps/openclaw-expenses/backend/venv/bin/uvicorn' || true
-
-sudo -u openclaw-expenses -H bash -lc '
-cd /home/openclaw-expenses/apps/openclaw-expenses/backend && \
-source venv/bin/activate && \
-pip install -r requirements-jwt.txt && \
-nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
-'
-```
-
-### 4.4 前端构建（pnpm）
-
-```bash
-sudo -u openclaw-expenses -H bash -lc '
-export PATH=$HOME/node-v18.19.0-linux-x64/bin:$PATH
-cd /home/openclaw-expenses/apps/openclaw-expenses/frontend
-corepack enable || true
-corepack prepare pnpm@10.28.2 --activate || true
-pnpm install --registry=https://registry.npmmirror.com
-pnpm build || pnpm exec vite build
-'
-```
-
-### 4.5 Nginx 重载与验证
-
-```bash
-sudo systemctl reload nginx
-
 curl -sS http://127.0.0.1:8000/api/health
-curl -sS -I http://120.27.250.73/ | head -n 1
-curl -sS http://120.27.250.73/api/health
+curl -sS http://127.0.0.1:8000/health
 ```
 
-## 5. deploy.sh 使用
-
-项目根目录执行：
+### 3.2 前端验证
 
 ```bash
-APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash deploy.sh
+cd frontend
+pnpm install --registry=https://registry.npmmirror.com
+pnpm build || pnpm exec vite build
 ```
 
-常用变量：
-- `APP_ENV`：`development` / `production`
+## 4. 使用 `full-deploy.sh` 一键部署
+
+在项目根目录执行：
+
+```bash
+APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
+```
+
+脚本主要动作：
+
+1. 检查 `python3`、`node`、`curl`。
+2. 自动解析 `pnpm`（必要时通过 `corepack`）。
+3. 创建/复用后端虚拟环境并安装依赖（默认 `requirements-jwt.txt`）。
+4. 启动 `uvicorn app.main:app`，执行健康检查。
+5. 安装前端依赖并构建，失败时回退到 `pnpm exec vite build`。
+6. 更新符号链接：`dist/frontend -> frontend/dist`。
+7. 可选重载 Nginx（`RELOAD_NGINX=true`）。
+
+### 4.1 常用环境变量
+
+- `APP_ENV`：默认 `development`
+- `BACKEND_VENV_DIR`：默认 `venv`
 - `BACKEND_REQUIREMENTS`：默认 `requirements-jwt.txt`
+- `BACKEND_HOST`：默认 `127.0.0.1`
+- `BACKEND_PORT`：默认 `8000`
+- `FRONTEND_REGISTRY`：默认 `https://registry.npmmirror.com`
 - `PNPM_VERSION`：默认 `10.28.2`
-- `RELOAD_NGINX`：`true/false`
 - `HEALTH_CHECK_URL`：默认 `http://<host>:<port>/api/health`
+- `DIST_LINK_PATH`：默认 `<repo>/dist/frontend`
+- `RELOAD_NGINX`：默认 `false`
 
-## 6. 常见问题
+## 5. 使用 `update-deploy.sh` 更新部署
 
-### Q1: `pnpm build` 失败并报 `vue-tsc` 相关错误
-- 现象：`Search string not found: "/supportedTSExtensions = .*(?=;)/"`
-- 处理：使用 `pnpm exec vite build` 作为构建兜底（当前生产流程已纳入）。
+```bash
+bash update-deploy.sh
+```
 
-### Q2: 后端启动后 8000 端口被占用
-- 处理：先 `pkill` 旧 `uvicorn` 进程，再重新启动。
+注意事项：
 
-### Q3: 健康检查失败
-- 排查顺序：
-  1. `backend.log`
-  2. `.env.production` / `.env.development` 配置
-  3. 数据库连通性
+- 该脚本会执行 `git reset --hard origin/master`。
+- 只建议在部署机使用，不要在有未提交改动的开发环境执行。
+
+## 6. Nginx 对齐建议
+
+仓库内 `nginx.conf` 的关键行为：
+
+- `location /`：回退到 `index.html`
+- `location /api/`：反向代理到 `127.0.0.1:8000/api/`
+- 兼容保留 `location /auth/`、`location /expenses/`
+
+若使用自定义域名或目录，请同步修改 `root` 与 `server_name`。
+
+## 7. 常见问题
+
+### Q1: `pnpm build` 失败
+
+- 现象：`vue-tsc` 或 TS 相关编译错误。
+- 处理：使用 `pnpm exec vite build`（脚本已内置回退）。
+
+### Q2: 后端健康检查失败
+
+按顺序排查：
+
+1. `backend/backend.log`（或脚本运行目录下 `backend.log`）
+2. `.env.production` / `.env.development` 配置是否完整
+3. 数据库连通性与账号权限
+4. 端口占用（`8000`）
+
+### Q3: 部署脚本创建 venv 失败
+
+- 可能原因：机器没有 `python3.9`。
+- 处理：安装 `python3.9`，或调整 `full-deploy.sh` 中创建虚拟环境的命令。
