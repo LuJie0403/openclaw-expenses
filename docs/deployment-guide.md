@@ -76,10 +76,12 @@ APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 1. 检查 `python3`、`node`、`curl`。
 2. 自动解析 `pnpm`（必要时通过 `corepack`）。
 3. 创建/复用后端虚拟环境并安装依赖（默认 `requirements.txt`）。
-4. 启动 `uvicorn app.main:app`，执行健康检查。
-5. 安装前端依赖并构建，失败时回退到 `pnpm exec vite build`。
-6. 更新符号链接：`dist/frontend -> frontend/dist`。
-7. 可选重载 Nginx（`RELOAD_NGINX=true`）。
+4. 启动前先清理后端端口占用（`BACKEND_PORT`），防止旧进程残留。
+5. 启动 `uvicorn app.main:app`，执行健康检查。
+6. 执行登录接口探针（默认 `/api/auth/login`，接受 `200/401/422`，拦截 `500`）。
+7. 安装前端依赖并构建，失败时回退到 `pnpm exec vite build`。
+8. 更新符号链接：`dist/frontend -> frontend/dist`。
+9. 可选重载 Nginx（`RELOAD_NGINX=true`）。
 
 ### 4.1 常用环境变量
 
@@ -91,6 +93,9 @@ APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 - `FRONTEND_REGISTRY`：默认 `https://registry.npmmirror.com`
 - `PNPM_VERSION`：默认 `10.28.2`
 - `HEALTH_CHECK_URL`：默认 `http://<host>:<port>/api/health`
+- `LOGIN_PROBE_ENABLED`：默认 `true`
+- `LOGIN_PROBE_URL`：默认 `http://<host>:<port>/api/auth/login`
+- `LOGIN_PROBE_TIMEOUT`：默认 `8`
 - `DIST_LINK_PATH`：默认 `<repo>/dist/frontend`
 - `RELOAD_NGINX`：默认 `false`
 
@@ -102,7 +107,10 @@ bash update-deploy.sh
 
 注意事项：
 
-- 该脚本会执行 `git reset --hard origin/master`。
+- 该脚本会先创建代码备份快照，再执行 `git reset --hard origin/master`。
+- 备份目录固定为 `/home/openclaw-expenses/backups`（可通过 `BACKUP_ROOT` 覆盖）。
+- 备份命名规则：`openclaw-expenses_YYYYMMDD-HHMMSS`（可通过 `BACKUP_PREFIX` 覆盖前缀）。
+- 可通过 `SKIP_CODE_BACKUP=true` 临时跳过备份（不建议常态化使用）。
 - 只建议在部署机使用，不要在有未提交改动的开发环境执行。
 
 ## 6. Nginx 对齐建议
