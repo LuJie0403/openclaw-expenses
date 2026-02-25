@@ -141,7 +141,17 @@ APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 bash update-deploy.sh
 ```
 
-`update-deploy.sh` 会执行 `git reset --hard origin/master`，仅建议在部署机上使用。
+`update-deploy.sh` 在更新代码前会自动创建代码快照备份，统一写入 `/home/openclaw-expenses/backups`，命名规则为：
+
+- `openclaw-expenses_backup_YYYYMMDD-HHMMSS`
+
+随后脚本会执行 `git reset --hard origin/master` 并调用 `full-deploy.sh`。仅建议在部署机上使用。
+
+常用变量（`update-deploy.sh`）：
+
+- `BACKUP_ROOT`：备份根目录，默认 `/home/openclaw-expenses/backups`
+- `BACKUP_PREFIX`：备份名前缀，默认 `openclaw-expenses_backup`
+- `SKIP_CODE_BACKUP`：是否跳过代码备份（默认 `false`）
 
 ## API 概览
 

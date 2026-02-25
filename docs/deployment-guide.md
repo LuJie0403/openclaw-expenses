@@ -107,7 +107,10 @@ bash update-deploy.sh
 
 注意事项：
 
-- 该脚本会执行 `git reset --hard origin/master`。
+- 该脚本会先创建代码备份快照，再执行 `git reset --hard origin/master`。
+- 备份目录固定为 `/home/openclaw-expenses/backups`（可通过 `BACKUP_ROOT` 覆盖）。
+- 备份命名规则：`openclaw-expenses_backup_YYYYMMDD-HHMMSS`（可通过 `BACKUP_PREFIX` 覆盖前缀）。
+- 可通过 `SKIP_CODE_BACKUP=true` 临时跳过备份（不建议常态化使用）。
 - 只建议在部署机使用，不要在有未提交改动的开发环境执行。
 
 ## 6. Nginx 对齐建议
