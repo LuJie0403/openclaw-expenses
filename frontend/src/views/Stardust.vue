@@ -24,16 +24,37 @@ import api from '../services/api';
 import { useAuthStore } from '@/stores/auth';
 import { formatAmount } from '@/utils/format';
 
+type StardustNode = {
+  id: string
+  name: string
+  value: number
+  symbolSize: number
+  category: number
+  label?: unknown
+  itemStyle?: unknown
+}
+
+type StardustLink = {
+  source: string
+  target: string
+}
+
+type StardustCategory = {
+  name: string
+}
+
+type StardustGraphData = {
+  nodes: StardustNode[]
+  links: StardustLink[]
+  categories: StardustCategory[]
+}
+
 const chartContainer = ref<HTMLElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
 const loading = ref(true);
 const error = ref<string | null>(null);
 const debugInfo = ref<string>('');
-const stardustData = ref<{
-  nodes: Array<Record<string, unknown>>
-  links: Array<Record<string, unknown>>
-  categories: Array<Record<string, unknown>>
-} | null>(null)
+const stardustData = ref<StardustGraphData | null>(null)
 const authStore = useAuthStore();
 const onResize = () => {
   if (chartInstance && stardustData.value) {
@@ -59,12 +80,12 @@ const splitEvenly = (items: string[], groups: number) => {
   return chunks;
 };
 
-const normalizeStardustPayload = (payload: any) => {
+const normalizeStardustPayload = (payload: any): StardustGraphData => {
   const rawNodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
   const rawLinks = Array.isArray(payload?.links) ? payload.links : [];
   const rawCategories = Array.isArray(payload?.categories) ? payload.categories : [];
 
-  const normalizedNodes = rawNodes.map((node: any, index: number) => {
+  const normalizedNodes: StardustNode[] = rawNodes.map((node: any, index: number) => {
     const id = String(node?.id ?? node?.name ?? `node_${index}`);
     const value = Number(node?.value ?? 0);
     const symbolSize = clamp(Number(node?.symbolSize ?? 18), 8, 90);
@@ -79,8 +100,8 @@ const normalizeStardustPayload = (payload: any) => {
     };
   });
 
-  const nodeById = new Map<string, any>();
-  const nodeByName = new Map<string, any>();
+  const nodeById = new Map<string, StardustNode>();
+  const nodeByName = new Map<string, StardustNode>();
   normalizedNodes.forEach((node) => {
     nodeById.set(node.id, node);
     nodeByName.set(node.name, node);
@@ -100,14 +121,14 @@ const normalizeStardustPayload = (payload: any) => {
     .filter(Boolean) as Array<{ source: string; target: string }>;
 
   if (!normalizedLinks.length && normalizedNodes.length > 1) {
-    const rootNode = normalizedNodes[0];
+    const rootNode = normalizedNodes[0]
     normalizedNodes.slice(1).forEach((node) => {
       normalizedLinks.push({ source: rootNode.id, target: node.id });
     });
   }
 
-  const maxCategoryIndex = normalizedNodes.reduce((max, node) => Math.max(max, Number(node.category || 0)), 0);
-  const normalizedCategories = rawCategories.map((item: any, index: number) => ({
+  const maxCategoryIndex = normalizedNodes.reduce((max: number, node: StardustNode) => Math.max(max, Number(node.category || 0)), 0)
+  const normalizedCategories: StardustCategory[] = rawCategories.map((item: any, index: number) => ({
     name: String(item?.name ?? `分组${index + 1}`),
   }));
   while (normalizedCategories.length <= maxCategoryIndex) {
@@ -131,7 +152,7 @@ const renderChart = () => {
 
   chartInstance = echarts.init(chartContainer.value)
   const data = stardustData.value
-  const categoryNames = data.categories.map((c: any) => String(c.name ?? '未分类'));
+  const categoryNames = data.categories.map((c) => String(c.name ?? '未分类'));
   const containerWidth = chartContainer.value.clientWidth || window.innerWidth || 1200;
   const maxItemsPerRow = containerWidth >= 1400 ? 7 : containerWidth >= 1200 ? 6 : containerWidth >= 900 ? 5 : containerWidth >= 700 ? 4 : 3;
   const rowCount = Math.max(1, Math.ceil(categoryNames.length / maxItemsPerRow));

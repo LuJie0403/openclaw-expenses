@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue'
+import { ref, watch, computed, onMounted, type CSSProperties } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { theme } from 'ant-design-vue'
@@ -75,7 +75,7 @@ const themeConfig = computed(() => ({
   }
 }))
 
-const guestLayoutWrapperStyle = {
+const guestLayoutWrapperStyle: CSSProperties = {
   minHeight: '100vh',
   display: 'flex',
   flexDirection: 'column',

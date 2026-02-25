@@ -169,6 +169,12 @@ let monthlyChart: Chart | null = null
 let categoryChart: echarts.ECharts | null = null
 let paymentChart: Chart | null = null
 let heatmapChart: Chart | null = null
+type CalendarDatum = {
+  date: string
+  value: number
+  week: number
+  day: string
+}
 
 // 初始化月度趋势图
 const initMonthlyChart = () => {
@@ -419,12 +425,12 @@ const initHeatmapChart = () => {
   if (!heatmapChartRef.value || !expenseStore.timeline.length) return
 
   // 1. Process data for calendar heatmap
-  const calendarData = expenseStore.timeline.map(d => ({
+  const calendarData: CalendarDatum[] = expenseStore.timeline.map((d) => ({
     date: d.date,
     value: d.daily_total,
     week: dayjs(d.date).week(),
     day: dayjs(d.date).format('YYYY-MM-DD'),
-  }));
+  }))
 
   heatmapChart = new Chart({
     container: heatmapChartRef.value,
@@ -439,8 +445,8 @@ const initHeatmapChart = () => {
   heatmapChart
     .cell() // Use cell geometry for heatmaps
     .data(calendarData)
-    .encode('x', d => dayjs(d.date).week()) // week number
-    .encode('y', d => dayjs(d.date).day())  // day of week
+    .encode('x', (d: CalendarDatum) => dayjs(d.date).week()) // week number
+    .encode('y', (d: CalendarDatum) => dayjs(d.date).day())  // day of week
     .encode('color', 'value')
     .scale('color', {
         palette: 'spectral', // Use a vibrant palette for dark mode
