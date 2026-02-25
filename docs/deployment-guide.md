@@ -28,7 +28,7 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools wheel
-pip install -r requirements-jwt.txt
+pip install -r requirements.txt
 
 cp .env.development.example .env.development
 # 按实际环境修改 DB 与 SECRET_KEY
@@ -75,7 +75,7 @@ APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 
 1. 检查 `python3`、`node`、`curl`。
 2. 自动解析 `pnpm`（必要时通过 `corepack`）。
-3. 创建/复用后端虚拟环境并安装依赖（默认 `requirements-jwt.txt`）。
+3. 创建/复用后端虚拟环境并安装依赖（默认 `requirements.txt`）。
 4. 启动 `uvicorn app.main:app`，执行健康检查。
 5. 安装前端依赖并构建，失败时回退到 `pnpm exec vite build`。
 6. 更新符号链接：`dist/frontend -> frontend/dist`。
@@ -85,7 +85,7 @@ APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 
 - `APP_ENV`：默认 `development`
 - `BACKEND_VENV_DIR`：默认 `venv`
-- `BACKEND_REQUIREMENTS`：默认 `requirements-jwt.txt`
+- `BACKEND_REQUIREMENTS`：默认 `requirements.txt`
 - `BACKEND_HOST`：默认 `127.0.0.1`
 - `BACKEND_PORT`：默认 `8000`
 - `FRONTEND_REGISTRY`：默认 `https://registry.npmmirror.com`

@@ -11,7 +11,7 @@ OpenClaw Expenses（钱呢）是一个前后端分离的消费数据分析系统
 - 部署脚本：`full-deploy.sh`（全量部署）、`update-deploy.sh`（更新并重部署）
 - 健康检查：`GET /health`、`GET /api/health`
 
-> 说明：`backend/` 根目录还保留了 `auth_*.py`、`main.py`、多套 `requirements-*.txt` 等历史文件。当前生产主路径以 `backend/app` 为准。
+> 说明：已清理历史 `auth_*.py` 与冗余 `requirements-*.txt`。`backend/` 根目录仍保留 `main.py`、`config.py` 等过渡文件；当前生产主路径以 `backend/app` 为准。
 
 ## 核心能力
 
@@ -39,7 +39,7 @@ backend/
     main.py     # FastAPI 入口（当前主入口）
   init_auth_db.py
   start.sh
-  requirements-jwt.txt
+  requirements.txt
 
 frontend/
   src/
@@ -71,7 +71,7 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools wheel
-pip install -r requirements-jwt.txt
+pip install -r requirements.txt
 
 cp .env.development.example .env.development
 # 修改 DB_HOST / DB_USER / DB_PASSWORD / DB_NAME / SECRET_KEY 等配置
@@ -125,7 +125,7 @@ APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 常用变量：
 
 - `APP_ENV`：`development` / `production`
-- `BACKEND_REQUIREMENTS`：默认 `requirements-jwt.txt`
+- `BACKEND_REQUIREMENTS`：默认 `requirements.txt`
 - `BACKEND_HOST` / `BACKEND_PORT`：后端监听地址
 - `HEALTH_CHECK_URL`：默认 `http://<host>:<port>/api/health`
 - `RELOAD_NGINX`：`true` 时尝试 `sudo systemctl reload nginx`

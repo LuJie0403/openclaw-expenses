@@ -26,8 +26,7 @@
 遗留层（建议收敛）：
 
 - `backend/main.py`
-- `backend/auth_*.py`
-- 多个 `backend/requirements-*.txt`
+- `backend/config.py`
 
 ## 3. 后端解读（FastAPI）
 
@@ -92,7 +91,7 @@
 `full-deploy.sh`：
 
 1. 检查 python/node/curl
-2. 创建后端 venv 并安装 `requirements-jwt.txt`
+2. 创建后端 venv 并安装 `requirements.txt`
 3. 启动 `uvicorn app.main:app`
 4. `/api/health` 健康检查
 5. 前端 `pnpm build`，失败回退 `pnpm exec vite build`
@@ -116,8 +115,7 @@ P1（优先）：
 P2（中期）：
 
 1. 数据库无连接池
-2. `auth_deploy.py` 内容不完整且不可执行
-3. 依赖清单分散（`requirements*.txt` 并存）
+2. 依赖管理仍可继续收敛（当前已统一到 `requirements.txt`）
 
 P3（优化）：
 
