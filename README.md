@@ -1,55 +1,70 @@
 # OpenClaw Expenses
 
-OpenClaw Expenses 是一个面向个人/团队的消费数据分析系统，提供总览、分类、支付方式、时间线与消费星辰可视化能力。
+OpenClaw Expenses（钱呢）是一个前后端分离的消费数据分析系统，支持登录鉴权、消费总览、分类分析、支付方式分析、时间洞察与消费星辰可视化。
+
+本文档基于当前仓库代码（`backend/app/**` + `frontend/src/**`）整理。
+
+## 当前代码主链路
+
+- 后端真实入口：`backend/app/main.py`（`FastAPI` + `/api/*` 路由）
+- 前端真实入口：`frontend/src/main.ts`（`Vue 3 + Pinia + Router`）
+- 部署脚本：`full-deploy.sh`（全量部署）、`update-deploy.sh`（更新并重部署）
+- 健康检查：`GET /health`、`GET /api/health`
+
+> 说明：`backend/` 根目录还保留了 `auth_*.py`、`main.py`、多套 `requirements-*.txt` 等历史文件。当前生产主路径以 `backend/app` 为准。
 
 ## 核心能力
-- 统一认证：基于 JWT 的登录态与接口鉴权。
-- 数据总览：总额、笔数、均值、时间跨度（含最早/最晚时间）。
-- 多维分析：月度趋势（近 12/24/36 月）、分类占比（饼图/矩形树图）、支付方式、时间线。
-- 明细一致性：支付方式详情与分类详情复用公共表格组件，支持页内序号、占比进度、分页统计、全字段排序。
-- 金额规范：全站金额字段统一千分位、保留两位小数，并在表头标注单位。
+
+- JWT 认证：登录获取 token，接口通过 `Bearer Token` 鉴权。
+- 数据总览：总支出、交易笔数、平均消费、最早/最晚日期。
+- 多维分析：月度趋势、分类占比（饼图/矩形树图）、支付方式、时间线洞察。
+- 可视化：Dashboard、Timeline、Stardust 页面分别采用 G2/ECharts。
+- 明细表复用：`DetailDataTable` 统一排序、分页、占比进度条与金额格式。
 
 ## 技术栈
-- 后端：FastAPI、Uvicorn、PyMySQL、Pydantic、python-jose、passlib
-- 前端：Vue 3、TypeScript、Pinia、Vue Router、Ant Design Vue
-- 图表：AntV G2、ECharts
-- 构建与部署：pnpm、Nginx
 
-## 目录结构
+- 后端：FastAPI、PyMySQL、python-jose、passlib、python-dotenv
+- 前端：Vue 3、TypeScript、Pinia、Vue Router、Ant Design Vue、Axios
+- 图表：AntV G2、ECharts
+- 部署：pnpm、Nginx、Shell 脚本
+
+## 目录结构（关键部分）
 
 ```text
 backend/
   app/
-    auth/
-    core/
-    expenses/
-    main.py
+    auth/       # 认证路由、schema、服务
+    core/       # 配置、数据库连接、安全能力
+    expenses/   # 业务查询路由与服务
+    main.py     # FastAPI 入口（当前主入口）
+  init_auth_db.py
   start.sh
-  requirements-*.txt
+  requirements-jwt.txt
 
 frontend/
   src/
-    components/
-      DetailDataTable.vue
-    services/
-    stores/
-    utils/
-    views/
+    components/DetailDataTable.vue
+    router/index.ts
+    services/api.ts
+    stores/{auth,expense}.ts
+    views/{Login,Dashboard,Categories,Payment,Timeline,Stardust}.vue
+    main.ts
 
 docs/
+  codebase-analysis.md
   deployment-guide.md
-  code-review.md
 ```
 
-## 运行要求
-- Python 3.8+
+## 环境要求
+
+- Python 3.9+（`full-deploy.sh` 创建虚拟环境时使用 `python3.9`）
 - Node.js 18+
 - pnpm 10+
 - MySQL 5.7+/8.0+
 
-## 本地开发（推荐）
+## 本地开发
 
-### 1) 后端
+### 1. 后端
 
 ```bash
 cd backend
@@ -58,14 +73,27 @@ source venv/bin/activate
 pip install --upgrade pip setuptools wheel
 pip install -r requirements-jwt.txt
 
-# 配置环境
 cp .env.development.example .env.development
-# 按需修改 DB / SECRET_KEY / CORS_ORIGINS
+# 修改 DB_HOST / DB_USER / DB_PASSWORD / DB_NAME / SECRET_KEY 等配置
+```
 
+首次初始化管理员账号（可选但推荐）：
+
+```bash
+cd backend
+source venv/bin/activate
+APP_ENV=development python init_auth_db.py
+```
+
+启动服务：
+
+```bash
+cd backend
+source venv/bin/activate
 APP_ENV=development uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### 2) 前端
+### 2. 前端
 
 ```bash
 cd frontend
@@ -73,43 +101,57 @@ pnpm install --registry=https://registry.npmmirror.com
 pnpm dev
 ```
 
-## 本地构建验证（与生产相对路径对齐）
+默认访问：
 
-建议在以下目录进行构建验证：
-- `/Users/iter_1024/apps/openclaw-expenses`
+- 前端：`http://127.0.0.1:3000`
+- 后端：`http://127.0.0.1:8000`
+- OpenAPI：`http://127.0.0.1:8000/docs`
+
+## 构建与部署
+
+### 前端构建
 
 ```bash
-cd /Users/iter_1024/apps/openclaw-expenses/frontend
-pnpm install --registry=https://registry.npmmirror.com
+cd frontend
 pnpm build || pnpm exec vite build
 ```
 
-> 说明：当前存在 `vue-tsc` 兼容问题时，使用 `pnpm exec vite build` 作为构建兜底。
-
-## 部署
-
-已提供统一部署脚本：`deploy.sh`
-
-关键特性：
-- 固定后端入口：`app.main:app`
-- 固定前端包管理：`pnpm`（含 corepack 引导）
-- 后端健康检查：`/api/health`
-- 前端构建兜底：`pnpm build || pnpm exec vite build`
-
-示例：
+### 一键部署（仓库根目录）
 
 ```bash
-# 在项目根目录
-APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash deploy.sh
-
-# 若需要自动重载 nginx（需 sudo 权限）
-RELOAD_NGINX=true bash deploy.sh
+APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 ```
 
-## API 健康检查
+常用变量：
+
+- `APP_ENV`：`development` / `production`
+- `BACKEND_REQUIREMENTS`：默认 `requirements-jwt.txt`
+- `BACKEND_HOST` / `BACKEND_PORT`：后端监听地址
+- `HEALTH_CHECK_URL`：默认 `http://<host>:<port>/api/health`
+- `RELOAD_NGINX`：`true` 时尝试 `sudo systemctl reload nginx`
+
+### 更新部署
+
+```bash
+bash update-deploy.sh
+```
+
+`update-deploy.sh` 会执行 `git reset --hard origin/master`，仅建议在部署机上使用。
+
+## API 概览
+
+- `POST /api/auth/login`：登录
+- `GET /api/auth/me`：当前用户
+- `GET /api/expenses/summary`
+- `GET /api/expenses/monthly`
+- `GET /api/expenses/categories`
+- `GET /api/expenses/payment-methods`
+- `GET /api/expenses/timeline`
+- `GET /api/expenses/stardust`
 - `GET /health`
 - `GET /api/health`
 
 ## 文档
+
+- 统一代码解读与评审（主文档）：`docs/codebase-analysis.md`
 - 部署指南：`docs/deployment-guide.md`
-- 走查与整改记录：`docs/code-review.md`
