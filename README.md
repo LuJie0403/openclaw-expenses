@@ -23,7 +23,7 @@ OpenClaw Expenses（钱呢）是一个前后端分离的消费数据分析系统
 
 ## 技术栈
 
-- 后端：FastAPI、PyMySQL、python-jose、passlib、python-dotenv
+- 后端：FastAPI、PyMySQL、python-jose、passlib、bcrypt（固定 `4.0.1`）、python-dotenv
 - 前端：Vue 3、TypeScript、Pinia、Vue Router、Ant Design Vue、Axios
 - 图表：AntV G2、ECharts
 - 部署：pnpm、Nginx、Shell 脚本
@@ -122,12 +122,17 @@ pnpm build || pnpm exec vite build
 APP_ENV=production BACKEND_HOST=127.0.0.1 BACKEND_PORT=8000 bash full-deploy.sh
 ```
 
+`full-deploy.sh` 现在会在启动后端前自动检测并清理端口占用（`BACKEND_PORT`），并在健康检查后执行一次登录接口探针（默认检查 `/api/auth/login`，预期返回 `200/401/422`，用于拦截 `500` 类异常）。
+
 常用变量：
 
 - `APP_ENV`：`development` / `production`
 - `BACKEND_REQUIREMENTS`：默认 `requirements.txt`
 - `BACKEND_HOST` / `BACKEND_PORT`：后端监听地址
 - `HEALTH_CHECK_URL`：默认 `http://<host>:<port>/api/health`
+- `LOGIN_PROBE_ENABLED`：是否启用登录探针（默认 `true`）
+- `LOGIN_PROBE_URL`：登录探针地址（默认 `http://<host>:<port>/api/auth/login`）
+- `LOGIN_PROBE_TIMEOUT`：登录探针超时秒数（默认 `8`）
 - `RELOAD_NGINX`：`true` 时尝试 `sudo systemctl reload nginx`
 
 ### 更新部署

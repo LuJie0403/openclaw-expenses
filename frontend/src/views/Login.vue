@@ -63,6 +63,27 @@ const formState = reactive({
 const loading = ref(false);
 const errorMessage = ref('');
 
+const resolveLoginErrorMessage = (error: any): string => {
+  const status = error?.response?.status;
+
+  if (status === 401) {
+    return 'Invalid username or password';
+  }
+  if (status === 422) {
+    return 'Login request is invalid. Please refresh and try again.';
+  }
+  if (status >= 500) {
+    return 'Server error during login. Please try again later.';
+  }
+  if (error?.code === 'ECONNABORTED') {
+    return 'Login request timed out. Please try again.';
+  }
+  if (!error?.response) {
+    return 'Network error. Please check your connection and try again.';
+  }
+  return `Login failed (HTTP ${status ?? 'unknown'}). Please try again.`;
+};
+
 const onFinish = async (values: any) => {
   loading.value = true;
   errorMessage.value = '';
@@ -71,11 +92,7 @@ const onFinish = async (values: any) => {
     message.success('Login successful');
     router.push('/');
   } catch (error: any) {
-    if (error.response && error.response.status === 401) {
-      errorMessage.value = 'Invalid username or password';
-    } else {
-      errorMessage.value = 'An error occurred. Please try again later.';
-    }
+    errorMessage.value = resolveLoginErrorMessage(error);
   } finally {
     loading.value = false;
   }

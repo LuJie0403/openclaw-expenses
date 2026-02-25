@@ -17,6 +17,9 @@ PNPM_VERSION="${PNPM_VERSION:-10.28.2}"
 RELOAD_NGINX="${RELOAD_NGINX:-false}"
 HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/health}"
 DIST_LINK_PATH="${DIST_LINK_PATH:-$ROOT_DIR/dist/frontend}"
+LOGIN_PROBE_ENABLED="${LOGIN_PROBE_ENABLED:-true}"
+LOGIN_PROBE_URL="${LOGIN_PROBE_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/auth/login}"
+LOGIN_PROBE_TIMEOUT="${LOGIN_PROBE_TIMEOUT:-8}"
 
 log() {
   echo "[deploy] $*"
@@ -62,6 +65,77 @@ wait_for_health() {
     sleep "$sleep_seconds"
   done
   return 1
+}
+
+find_listen_pid_by_port() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp 2>/dev/null | awk -v port=":$port" '
+      $4 ~ port"$" || $4 ~ port"[[:space:]]" {
+        if (match($0, /pid=[0-9]+/)) {
+          print substr($0, RSTART + 4, RLENGTH - 4)
+          exit
+        }
+      }
+    '
+    return 0
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | head -n 1
+    return 0
+  fi
+}
+
+cleanup_backend_port() {
+  local pid
+  pid="$(find_listen_pid_by_port "$BACKEND_PORT" || true)"
+  if [ -n "$pid" ]; then
+    log "Port ${BACKEND_PORT} is occupied by PID ${pid}, stopping it..."
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+
+  pid="$(find_listen_pid_by_port "$BACKEND_PORT" || true)"
+  if [ -n "$pid" ]; then
+    log "Port ${BACKEND_PORT} is still occupied by PID ${pid}, force killing..."
+    kill -9 "$pid" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+
+  pid="$(find_listen_pid_by_port "$BACKEND_PORT" || true)"
+  [ -z "$pid" ] || die "Port ${BACKEND_PORT} is still occupied by PID ${pid}"
+}
+
+probe_login_endpoint() {
+  [ "$LOGIN_PROBE_ENABLED" = "true" ] || return 0
+
+  local response_file status body_preview payload
+  response_file="$(mktemp)"
+  payload='{"username":"__deploy_probe__","password":"__deploy_probe__"}'
+  status="$(curl -sS -o "$response_file" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    --max-time "$LOGIN_PROBE_TIMEOUT" \
+    --data "$payload" \
+    "$LOGIN_PROBE_URL" || true)"
+
+  case "$status" in
+    200|401|422)
+      log "Login probe passed (${status}): $LOGIN_PROBE_URL"
+      ;;
+    "")
+      rm -f "$response_file"
+      die "Login probe failed: no HTTP response from $LOGIN_PROBE_URL"
+      ;;
+    *)
+      body_preview="$(head -c 200 "$response_file" | tr '\n' ' ')"
+      rm -f "$response_file"
+      die "Login probe failed (${status}): $LOGIN_PROBE_URL; response: ${body_preview}"
+      ;;
+  esac
+
+  rm -f "$response_file"
 }
 
 log "Starting deployment from: $ROOT_DIR"
@@ -111,6 +185,7 @@ log "Installing backend dependencies..."
 log "Stopping old backend process (if exists)..."
 pkill -f "$BACKEND_UVICORN app.main:app" >/dev/null 2>&1 || true
 pkill -f "uvicorn app.main:app --host $BACKEND_HOST --port $BACKEND_PORT" >/dev/null 2>&1 || true
+cleanup_backend_port
 
 log "Starting backend: app.main:app (${BACKEND_HOST}:${BACKEND_PORT})"
 nohup "$BACKEND_UVICORN" app.main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" > backend.log 2>&1 &
@@ -121,6 +196,7 @@ if ! wait_for_health 20 1; then
   tail -n 80 backend.log || true
   die "Backend health check failed: $HEALTH_CHECK_URL"
 fi
+probe_login_endpoint
 
 log "Deploying frontend with pnpm..."
 cd "$FRONTEND_DIR"
