@@ -6,7 +6,7 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_ROOT="${BACKUP_ROOT:-/home/openclaw-expenses/backups}"
-BACKUP_PREFIX="${BACKUP_PREFIX:-openclaw-expenses_backup}"
+BACKUP_PREFIX="${BACKUP_PREFIX:-openclaw-expenses}"
 SKIP_CODE_BACKUP="${SKIP_CODE_BACKUP:-false}"
 BACKUP_TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${BACKUP_ROOT}/${BACKUP_PREFIX}_${BACKUP_TIMESTAMP}"
