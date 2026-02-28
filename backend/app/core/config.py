@@ -1,5 +1,5 @@
-
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -8,8 +8,16 @@ load_dotenv(".env", override=False)
 _APP_ENV = os.getenv("APP_ENV", "development").lower()
 load_dotenv(f".env.{_APP_ENV}", override=False)
 
+
 def parse_cors_origins(origins_value: str):
     return [origin.strip() for origin in origins_value.split(",") if origin.strip()]
+
+
+def parse_sql_identifier(value: str, default: str) -> str:
+    candidate = (value or default).strip()
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", candidate):
+        return candidate
+    raise ValueError(f"Invalid SQL identifier: {candidate}")
 
 
 class Settings:
@@ -19,7 +27,11 @@ class Settings:
     DB_PORT = int(os.getenv("DB_PORT", 3306))
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-    DB_NAME = os.getenv("DB_NAME", "openclaw_expenses")
+    DB_NAME = os.getenv("DB_NAME", "iterlife_reunion")
+    AUTH_USER_TABLE = parse_sql_identifier(
+        os.getenv("AUTH_USER_TABLE", "iterlife_user"),
+        "iterlife_user",
+    )
 
     SECRET_KEY = os.getenv("SECRET_KEY", "")
     ALGORITHM = os.getenv("ALGORITHM", "HS256")
@@ -30,6 +42,7 @@ class Settings:
 
     PROJECT_NAME = "OpenClaw Expenses API"
     PROJECT_VERSION = "2.1.0"
+
 
 settings = Settings()
 
