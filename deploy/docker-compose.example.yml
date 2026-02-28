@@ -8,6 +8,8 @@ services:
     env_file:
       - ${BACKEND_ENV_FILE:-/apps/config/iterlife-expenses/backend.env}
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${API_BIND_HOST:-127.0.0.1}:${API_PORT:-18000}:8000"
     healthcheck:
