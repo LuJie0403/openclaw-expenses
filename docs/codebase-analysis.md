@@ -1,163 +1,70 @@
-# OpenClaw Expenses 统一代码解读与评审（Merged, 2026-02-25）
+# iterlife-expenses 后端代码解读与评审（拆分后）
 
-本文件是当前唯一维护的“代码分析主文档”，已合并以下历史文档内容：
+本文档聚焦 `iterlife-expenses` 后端仓库。前端已拆分为独立仓库：
+`/Users/iter_1024/repository/iterlife-expenses-ui`。
 
-- 评审与改进建议稿（原 `code-review`）
-- 阶段学习记录稿（原 `code-review-by-1024`）
-- 旧版 `codebase-analysis` 正文（架构解读）
+## 1. 仓库定位
 
-## 1. 项目定位
+- 职责：认证、鉴权、消费数据查询与聚合、健康检查、Docker 部署脚本
+- 技术栈：FastAPI + PyMySQL + JWT（python-jose）+ Passlib(bcrypt)
+- 数据库基线：`iterlife_reunion`
+- 用户管理表基线：`iterlife_user`（环境变量 `AUTH_USER_TABLE`）
 
-这是一个前后端分离的消费分析系统：
-
-- 后端负责：认证、数据聚合查询、鉴权、健康检查
-- 前端负责：看板、图表、筛选交互、会话管理
-- 部署负责：后端启动、前端构建、健康检查、Nginx 联动
-
-## 2. 当前主链路与遗留层
-
-主链路（建议维护）：
-
-- `backend/app/**`
-- `frontend/src/**`
-- `full-deploy.sh`
-- `update-deploy.sh`
-
-遗留层（建议收敛）：
-
-- `backend/main.py`
-- `backend/config.py`
-
-## 3. 后端解读（FastAPI）
+## 2. 后端主链路
 
 启动与配置：
 
-- 主入口：`backend/app/main.py`
+- 入口：`backend/app/main.py`
 - 配置：`backend/app/core/config.py`
-- 环境加载顺序：`.env` -> `.env.<APP_ENV>`
-- 生产环境未配置 `SECRET_KEY` 会直接抛错
+- 环境：按 `APP_ENV` 加载 `.env.<APP_ENV>`
 
-路由：
+API：
 
 - 认证：`/api/auth/login`、`/api/auth/me`
 - 业务：`/api/expenses/{summary,monthly,categories,payment-methods,timeline,stardust}`
-- 健康检查：`/health`、`/api/health`
+- 健康：`/api/health`、`/health`
 
-安全与鉴权：
+鉴权：
 
-- JWT（`python-jose`）+ bcrypt（`passlib`）
-- 请求通过 `OAuth2PasswordBearer` 解码 token
-- token payload 包含 `sub` 和 `user_id`
+- OAuth2PasswordBearer + JWT
+- token payload 含 `sub` 与 `user_id`
+- 管理员与普通用户的数据访问范围隔离
 
-数据访问：
+## 3. 数据访问与风险点
 
-- 当前为 `pymysql.connect` 直连（无连接池）
-- 用户隔离逻辑：`admin` 看全量，普通用户按 `user_id` 过滤
-- 主要表：`expenses_user`、`personal_expenses_final`、`personal_expenses_type`
+现状：
 
-## 4. 前端解读（Vue 3 + TS）
+- 使用 `pymysql` 直连数据库
+- 用户表改为可配置（默认 `iterlife_user`）
 
-骨架：
+主要风险：
 
-- 入口：`frontend/src/main.ts`
-- 布局：`frontend/src/App.vue`
-- 路由：`frontend/src/router/index.ts`
-- Store：`auth.ts`、`expense.ts`
-- API：`services/api.ts`
+1. 无连接池，峰值下连接抖动风险较高
+2. SQL 与字段约束对历史脏数据容忍度有限
+3. 生产配置项缺失时容易在登录链路暴露为 500
 
-登录态：
-
-1. `/auth/login` 获取 token
-2. token 写入 `localStorage`
-3. `/auth/me` 拉取用户
-4. Axios 拦截器自动注入 `Authorization`
-5. `401` 时清理 token 并跳转登录页
-
-页面映射：
-
-- `Dashboard`：汇总、月趋势、分类、支付、热力图
-- `Categories`：分类图 + 详情表
-- `Payment`：支付图 + 统计 + 详情表
-- `Timeline`：日周月年洞察
-- `Stardust`：消费星辰图（含 payload 归一化）
-
-复用能力：
-
-- `DetailDataTable`：排序、分页、占比列、序号列
-- `utils/format.ts`：金额/数字/日期格式化
-
-## 5. 部署链路解读
+## 4. 部署流程（Docker）
 
 `full-deploy.sh`：
 
-1. 检查 python/node/curl
-2. 创建后端 venv 并安装 `requirements.txt`
-3. 启动 `uvicorn app.main:app`
-4. `/api/health` 健康检查
-5. 前端 `pnpm build`，失败回退 `pnpm exec vite build`
-6. 更新 `dist/frontend` 软链
-7. 可选 `RELOAD_NGINX=true` 重载 Nginx
+1. 校验 Docker / Compose 与配置文件
+2. 基于 `deploy/docker-compose.example.yml` 构建并启动 API/UI
+3. 对 API 与 UI 进行健康检查
 
 `update-deploy.sh`：
 
-1. `git fetch origin`
-2. `git reset --hard origin/master`
-3. 调用 `full-deploy.sh`
+1. 备份双仓库代码到 `/home/openclaw-expenses/backups/openclaw-expenses_YYYYMMDD-HHMMSS`
+2. 后端与前端分别同步到 `origin/master`
+3. 调用 `full-deploy.sh` 重建容器
 
-## 6. 风险分级（最新）
+## 5. 配置隔离原则
 
-P1（优先）：
+1. 运行配置放在仓库外：`/apps/config/iterlife-expenses/*`
+2. 仓库只保留模板：`backend/.env.*.example`、`deploy/docker-compose.example.yml`
+3. 禁止提交真实密码、密钥、证书
 
-1. 多入口并存（易误启动）
-2. `update-deploy.sh` 强制 reset（易误操作）
-3. token 存 `localStorage`（XSS 风险）
+## 6. 拆分后建议
 
-P2（中期）：
-
-1. 数据库无连接池
-2. 依赖管理仍可继续收敛（当前已统一到 `requirements.txt`）
-
-P3（优化）：
-
-1. 前端容错逻辑较多，后端字段规范可继续收紧
-2. 样式体系可继续抽象主题变量
-3. 自动化测试覆盖不足
-
-## 7. 现状优势
-
-1. 前后端接口对齐度较高
-2. 后端分层清晰（router -> service -> schema）
-3. 前端表格复用与图表组织较成熟
-4. 部署脚本有健康检查和构建兜底
-
-## 8. 建议改造顺序
-
-第一阶段（1-2 天）：
-
-1. 收敛入口和依赖文件
-2. 清理不可用历史脚本
-3. 给部署脚本增加安全护栏
-
-第二阶段（3-5 天）：
-
-1. 引入数据库连接池
-2. 统一依赖管理
-3. 增加 API 冒烟测试
-
-第三阶段（长期）：
-
-1. 迁移到 HttpOnly Cookie 认证
-2. 完善配置分层与发布自动化
-
-## 9. 本地验证记录（2026-02-25）
-
-已执行：
-
-1. `python3 -m compileall backend/app`（通过）
-2. `cd frontend && pnpm exec vite build`（失败：缺少 `node_modules`，`vite` 未安装）
-
-结论：源码可解析，完整构建前需先安装依赖。
-
-## 10. 历史记录说明
-
-2026-02-22 阶段记录中的关键观察（如“连接池缺失、文件混乱”）与当前结论方向一致，已吸收进本文件，不再单独维护多份评审正文。
+1. 后端与前端通过 API 合约协作，避免跨仓库耦合改动
+2. 为关键接口补齐冒烟测试（至少覆盖登录、健康检查、核心查询）
+3. 引入数据库连接池（如 SQLAlchemy engine pool）降低高并发风险

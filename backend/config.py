@@ -1,4 +1,6 @@
 import os
+import re
+
 from dotenv import load_dotenv
 
 # Load environment variables with environment-specific overrides.
@@ -19,14 +21,25 @@ def parse_bool(value: str, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def parse_sql_identifier(value: str, default: str) -> str:
+    candidate = (value or default).strip()
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", candidate):
+        return candidate
+    raise ValueError(f"Invalid SQL identifier: {candidate}")
+
+
 class Settings:
     # Database Settings
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = int(os.getenv("DB_PORT", 3306))
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-    DB_NAME = os.getenv("DB_NAME", "expense_db")
-    
+    DB_NAME = os.getenv("DB_NAME", "iterlife_reunion")
+    AUTH_USER_TABLE = parse_sql_identifier(
+        os.getenv("AUTH_USER_TABLE", "iterlife_user"),
+        "iterlife_user",
+    )
+
     # Runtime Settings
     APP_ENV = os.getenv("APP_ENV", "development").lower()
     CORS_ORIGINS = parse_cors_origins(
@@ -48,7 +61,10 @@ class Settings:
 
     @property
     def DATABASE_URL(self):
-        return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        return (
+            f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
 
 
 settings = Settings()

@@ -1,25 +1,24 @@
 #!/bin/bash
-# One-command deploy script (backend + frontend build)
+# Dockerized deployment for iterlife-expenses API + iterlife-expenses-ui.
+# Config/code isolation: runtime env files must live outside git repos.
 
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$ROOT_DIR/backend"
-FRONTEND_DIR="$ROOT_DIR/frontend"
 
-APP_ENV="${APP_ENV:-development}"
-BACKEND_VENV_DIR="${BACKEND_VENV_DIR:-venv}"
-BACKEND_REQUIREMENTS="${BACKEND_REQUIREMENTS:-requirements.txt}"
-BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
-BACKEND_PORT="${BACKEND_PORT:-8000}"
-FRONTEND_REGISTRY="${FRONTEND_REGISTRY:-https://registry.npmmirror.com}"
-PNPM_VERSION="${PNPM_VERSION:-10.28.2}"
-RELOAD_NGINX="${RELOAD_NGINX:-false}"
-HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/health}"
-DIST_LINK_PATH="${DIST_LINK_PATH:-$ROOT_DIR/dist/frontend}"
-LOGIN_PROBE_ENABLED="${LOGIN_PROBE_ENABLED:-true}"
-LOGIN_PROBE_URL="${LOGIN_PROBE_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/auth/login}"
-LOGIN_PROBE_TIMEOUT="${LOGIN_PROBE_TIMEOUT:-8}"
+BACKEND_REPO_DIR="${BACKEND_REPO_DIR:-$ROOT_DIR}"
+UI_REPO_DIR="${UI_REPO_DIR:-$(cd "$ROOT_DIR/.." && pwd)/iterlife-expenses-ui}"
+COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/deploy/docker-compose.example.yml}"
+
+CONFIG_ROOT="${CONFIG_ROOT:-/apps/config/iterlife-expenses}"
+BACKEND_ENV_FILE="${BACKEND_ENV_FILE:-$CONFIG_ROOT/backend.env}"
+UI_ENV_FILE="${UI_ENV_FILE:-$CONFIG_ROOT/ui.env}"
+UI_RUNTIME_CONFIG_FILE="${UI_RUNTIME_CONFIG_FILE:-$CONFIG_ROOT/ui-runtime-config.js}"
+
+API_BIND_HOST="${API_BIND_HOST:-127.0.0.1}"
+API_PORT="${API_PORT:-18000}"
+UI_BIND_HOST="${UI_BIND_HOST:-127.0.0.1}"
+UI_PORT="${UI_PORT:-13000}"
 
 log() {
   echo "[deploy] $*"
@@ -34,32 +33,21 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing command: $1"
 }
 
-resolve_pnpm_cmd() {
-  if command -v pnpm >/dev/null 2>&1; then
-    PNPM_CMD=(pnpm)
-    return
-  fi
-
-  require_cmd corepack
-  corepack enable >/dev/null 2>&1 || true
-  corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null 2>&1 || true
-
-  if command -v pnpm >/dev/null 2>&1; then
-    PNPM_CMD=(pnpm)
-    return
-  fi
-
-  # Fallback for environments where shim is not on PATH
-  PNPM_CMD=(corepack pnpm)
+check_file() {
+  [ -f "$1" ] || die "Required file not found: $1"
 }
 
-wait_for_health() {
-  local retries="${1:-20}"
-  local sleep_seconds="${2:-1}"
+check_dir() {
+  [ -d "$1" ] || die "Required directory not found: $1"
+}
+
+wait_for_http_ok() {
+  local url="$1"
+  local retries="${2:-30}"
+  local sleep_seconds="${3:-2}"
   local i
   for i in $(seq 1 "$retries"); do
-    if curl -fsS "$HEALTH_CHECK_URL" >/dev/null 2>&1; then
-      log "Backend health check passed: $HEALTH_CHECK_URL"
+    if curl -fsS "$url" >/dev/null 2>&1; then
       return 0
     fi
     sleep "$sleep_seconds"
@@ -67,164 +55,48 @@ wait_for_health() {
   return 1
 }
 
-find_listen_pid_by_port() {
-  local port="$1"
-
-  if command -v ss >/dev/null 2>&1; then
-    ss -ltnp 2>/dev/null | awk -v port=":$port" '
-      $4 ~ port"$" || $4 ~ port"[[:space:]]" {
-        if (match($0, /pid=[0-9]+/)) {
-          print substr($0, RSTART + 4, RLENGTH - 4)
-          exit
-        }
-      }
-    '
-    return 0
-  fi
-
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | head -n 1
-    return 0
-  fi
-}
-
-cleanup_backend_port() {
-  local pid
-  pid="$(find_listen_pid_by_port "$BACKEND_PORT" || true)"
-  if [ -n "$pid" ]; then
-    log "Port ${BACKEND_PORT} is occupied by PID ${pid}, stopping it..."
-    kill "$pid" >/dev/null 2>&1 || true
-    sleep 1
-  fi
-
-  pid="$(find_listen_pid_by_port "$BACKEND_PORT" || true)"
-  if [ -n "$pid" ]; then
-    log "Port ${BACKEND_PORT} is still occupied by PID ${pid}, force killing..."
-    kill -9 "$pid" >/dev/null 2>&1 || true
-    sleep 1
-  fi
-
-  pid="$(find_listen_pid_by_port "$BACKEND_PORT" || true)"
-  [ -z "$pid" ] || die "Port ${BACKEND_PORT} is still occupied by PID ${pid}"
-}
-
-probe_login_endpoint() {
-  [ "$LOGIN_PROBE_ENABLED" = "true" ] || return 0
-
-  local response_file status body_preview payload
-  response_file="$(mktemp)"
-  payload='{"username":"__deploy_probe__","password":"__deploy_probe__"}'
-  status="$(curl -sS -o "$response_file" -w "%{http_code}" \
-    -H "Content-Type: application/json" \
-    --max-time "$LOGIN_PROBE_TIMEOUT" \
-    --data "$payload" \
-    "$LOGIN_PROBE_URL" || true)"
-
-  case "$status" in
-    200|401|422)
-      log "Login probe passed (${status}): $LOGIN_PROBE_URL"
-      ;;
-    "")
-      rm -f "$response_file"
-      die "Login probe failed: no HTTP response from $LOGIN_PROBE_URL"
-      ;;
-    *)
-      body_preview="$(head -c 200 "$response_file" | tr '\n' ' ')"
-      rm -f "$response_file"
-      die "Login probe failed (${status}): $LOGIN_PROBE_URL; response: ${body_preview}"
-      ;;
-  esac
-
-  rm -f "$response_file"
-}
-
-log "Starting deployment from: $ROOT_DIR"
-require_cmd python3
-require_cmd node
+require_cmd docker
 require_cmd curl
 
-if [ ! -d "$BACKEND_DIR" ] || [ ! -d "$FRONTEND_DIR" ]; then
-  die "Project structure not found under $ROOT_DIR"
+docker compose version >/dev/null 2>&1 || die "docker compose plugin not available"
+
+check_dir "$BACKEND_REPO_DIR"
+check_dir "$UI_REPO_DIR"
+check_file "$COMPOSE_FILE"
+check_file "$BACKEND_ENV_FILE"
+check_file "$UI_ENV_FILE"
+check_file "$UI_RUNTIME_CONFIG_FILE"
+
+export BACKEND_REPO_DIR
+export UI_REPO_DIR
+export BACKEND_ENV_FILE
+export UI_ENV_FILE
+export UI_RUNTIME_CONFIG_FILE
+export API_BIND_HOST
+export API_PORT
+export UI_BIND_HOST
+export UI_PORT
+
+log "Deploying with compose file: $COMPOSE_FILE"
+log "Backend repo: $BACKEND_REPO_DIR"
+log "UI repo: $UI_REPO_DIR"
+log "Config root: $CONFIG_ROOT"
+
+docker compose -f "$COMPOSE_FILE" up -d --build
+
+API_HEALTH_URL="http://${API_BIND_HOST}:${API_PORT}/api/health"
+UI_HEALTH_URL="http://${UI_BIND_HOST}:${UI_PORT}"
+
+if ! wait_for_http_ok "$API_HEALTH_URL" 30 2; then
+  docker compose -f "$COMPOSE_FILE" logs --tail=200 iterlife-expenses-api || true
+  die "API health check failed: $API_HEALTH_URL"
 fi
 
-resolve_pnpm_cmd
-log "Using pnpm command: ${PNPM_CMD[*]}"
-"${PNPM_CMD[@]}" -v
-
-log "Deploying backend..."
-cd "$BACKEND_DIR"
-
-if [ ! -d "$BACKEND_VENV_DIR" ]; then
-  log "Creating backend virtualenv: $BACKEND_VENV_DIR"
-  python3.9 -m venv "$BACKEND_VENV_DIR"
+if ! wait_for_http_ok "$UI_HEALTH_URL" 30 2; then
+  docker compose -f "$COMPOSE_FILE" logs --tail=200 iterlife-expenses-ui || true
+  die "UI health check failed: $UI_HEALTH_URL"
 fi
 
-BACKEND_PYTHON="$BACKEND_DIR/$BACKEND_VENV_DIR/bin/python"
-BACKEND_UVICORN="$BACKEND_DIR/$BACKEND_VENV_DIR/bin/uvicorn"
-
-[ -x "$BACKEND_PYTHON" ] || die "Virtualenv python not found: $BACKEND_PYTHON"
-[ -f "$BACKEND_REQUIREMENTS" ] || die "Requirements file not found: $BACKEND_REQUIREMENTS"
-
-if [ ! -f ".env.${APP_ENV}" ]; then
-  if [ -f ".env.${APP_ENV}.example" ]; then
-    log "Creating backend env file: .env.${APP_ENV} (from example)"
-    cp ".env.${APP_ENV}.example" ".env.${APP_ENV}"
-  elif [ -f ".env.example" ]; then
-    log "Creating backend env file: .env.${APP_ENV} (from .env.example)"
-    cp ".env.example" ".env.${APP_ENV}"
-  else
-    die "Missing env template (.env.${APP_ENV}.example or .env.example)"
-  fi
-fi
-
-log "Installing backend dependencies..."
-"$BACKEND_PYTHON" -m pip install --upgrade pip setuptools wheel
-"$BACKEND_PYTHON" -m pip install -r "$BACKEND_REQUIREMENTS"
-[ -x "$BACKEND_UVICORN" ] || die "Virtualenv uvicorn not found after dependency install"
-
-log "Stopping old backend process (if exists)..."
-pkill -f "$BACKEND_UVICORN app.main:app" >/dev/null 2>&1 || true
-pkill -f "uvicorn app.main:app --host $BACKEND_HOST --port $BACKEND_PORT" >/dev/null 2>&1 || true
-cleanup_backend_port
-
-log "Starting backend: app.main:app (${BACKEND_HOST}:${BACKEND_PORT})"
-nohup "$BACKEND_UVICORN" app.main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" > backend.log 2>&1 &
-BACKEND_PID=$!
-log "Backend started with PID: $BACKEND_PID"
-
-if ! wait_for_health 20 1; then
-  tail -n 80 backend.log || true
-  die "Backend health check failed: $HEALTH_CHECK_URL"
-fi
-probe_login_endpoint
-
-log "Deploying frontend with pnpm..."
-cd "$FRONTEND_DIR"
-"${PNPM_CMD[@]}" install --registry "$FRONTEND_REGISTRY"
-
-if ! "${PNPM_CMD[@]}" build; then
-  log "pnpm build failed, fallback to: pnpm exec vite build"
-  "${PNPM_CMD[@]}" exec vite build
-fi
-
-mkdir -p "$(dirname "$DIST_LINK_PATH")"
-ln -sfn "$FRONTEND_DIR/dist" "$DIST_LINK_PATH"
-log "Frontend dist symlink updated: $DIST_LINK_PATH -> $FRONTEND_DIR/dist"
-
-if [ "$RELOAD_NGINX" = "true" ]; then
-  if command -v systemctl >/dev/null 2>&1; then
-    if sudo systemctl reload nginx; then
-      log "Nginx reloaded."
-    else
-      die "Failed to reload nginx via systemctl."
-    fi
-  else
-    die "RELOAD_NGINX=true but systemctl not found."
-  fi
-fi
-
-log "Deployment completed successfully."
-echo
-echo "Backend health: $HEALTH_CHECK_URL"
-echo "Backend docs:   http://${BACKEND_HOST}:${BACKEND_PORT}/docs"
-echo "Frontend dist:  $FRONTEND_DIR/dist"
+log "Docker deployment completed successfully."
+echo "API health: $API_HEALTH_URL"
+echo "UI health:  $UI_HEALTH_URL"
